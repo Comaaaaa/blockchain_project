@@ -55,7 +55,7 @@ export default function Header() {
           </nav>
 
           {/* Right side */}
-          <div className="hidden md:flex items-center space-x-3">
+          <div className="hidden md:flex items-center gap-4">
             <ConnectButton
               showBalance={false}
               chainStatus="icon"
@@ -74,7 +74,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/auth/signin"
-                className="px-4 py-2 bg-orange text-white text-sm font-semibold rounded-lg hover:bg-orange-dark transition-colors"
+                className="inline-flex items-center px-5 py-2.5 bg-orange text-white text-sm font-semibold rounded-lg hover:bg-orange-dark transition-colors"
               >
                 Connexion
               </Link>
@@ -123,7 +123,7 @@ export default function Header() {
               {!session && (
                 <Link
                   href="/auth/signin"
-                  className="block text-center px-4 py-2.5 bg-orange text-white text-sm font-semibold rounded-lg hover:bg-orange-dark transition-colors"
+                  className="block text-center px-5 py-2.5 bg-orange text-white text-sm font-semibold rounded-lg hover:bg-orange-dark transition-colors"
                   onClick={() => setMobileOpen(false)}
                 >
                   Connexion

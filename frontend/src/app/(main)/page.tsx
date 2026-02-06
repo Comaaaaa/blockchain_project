@@ -76,7 +76,7 @@ export default function HomePage() {
                 <Button size="lg">Voir les biens disponibles</Button>
               </Link>
               <Link href="/auth/signup">
-                <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-dark">
+                <Button size="lg" variant="outline" className="border-white text-white hover:!bg-white hover:!text-orange">
                   Creer un compte
                 </Button>
               </Link>
