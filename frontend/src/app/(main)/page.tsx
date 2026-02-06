@@ -179,7 +179,8 @@ export default function HomePage() {
             <Link href="/properties">
               <Button
                 size="lg"
-                className="bg-white text-orange hover:bg-gray-100"
+                variant="outline"
+                className="border-white text-white hover:!bg-white hover:!text-orange"
               >
                 Explorer les biens
               </Button>
@@ -188,7 +189,7 @@ export default function HomePage() {
               <Button
                 size="lg"
                 variant="outline"
-                className="border-white text-white hover:bg-white hover:text-orange"
+                className="border-white text-white hover:!bg-white hover:!text-orange"
               >
                 Proposer un bien
               </Button>
