@@ -6,6 +6,7 @@ import { formatCurrency } from '@/lib/utils';
 import { PropertyTokenABI, getContractAddresses } from '@/lib/contracts';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useTransactionContext } from '@/context/TransactionContext';
+import { usePropertyContext } from '@/context/PropertyContext';
 import Button from '@/components/ui/Button';
 import { v4 as uuidv4 } from 'uuid';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
@@ -20,7 +21,8 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const { dispatch: portfolioDispatch } = usePortfolioContext();
-  const { dispatch: txDispatch } = useTransactionContext();
+  const { addTransaction } = useTransactionContext();
+  const { dispatch: propertyDispatch } = usePropertyContext();
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
@@ -56,23 +58,20 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         value: parseEther('0.001') * BigInt(tokens), // tokenPrice * tokens
       });
 
-      // Record transaction
-      txDispatch({
-        type: 'ADD_TRANSACTION',
-        payload: {
-          id: uuidv4(),
-          type: 'purchase',
-          propertyId: property.id,
-          propertyTitle: property.title,
-          from: '0x0000000000000000000000000000000000000000',
-          to: address,
-          tokens,
-          pricePerToken: property.tokenInfo.tokenPrice,
-          totalAmount: totalCost,
-          txHash: hash,
-          status: 'confirmed',
-          createdAt: new Date().toISOString(),
-        },
+      // Record transaction (persisted to backend)
+      addTransaction({
+        id: uuidv4(),
+        type: 'purchase',
+        propertyId: property.id,
+        propertyTitle: property.title,
+        from: '0x0000000000000000000000000000000000000000',
+        to: address,
+        tokens,
+        pricePerToken: property.tokenInfo.tokenPrice,
+        totalAmount: totalCost,
+        txHash: hash,
+        status: 'confirmed',
+        createdAt: new Date().toISOString(),
       });
 
       portfolioDispatch({
@@ -82,6 +81,23 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
           tokens,
           pricePerToken: property.tokenInfo.tokenPrice,
           property,
+        },
+      });
+
+      // Optimistic UI update: update available tokens and status immediately
+      const newAvailable = property.tokenInfo.availableTokens - tokens;
+      const newStatus = newAvailable <= 0 ? 'funded' : 'funding';
+      propertyDispatch({
+        type: 'UPDATE_PROPERTY',
+        payload: {
+          id: property.id,
+          updates: {
+            tokenInfo: {
+              ...property.tokenInfo,
+              availableTokens: Math.max(0, newAvailable),
+            },
+            status: newStatus,
+          },
         },
       });
 

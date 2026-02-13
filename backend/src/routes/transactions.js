@@ -36,6 +36,56 @@ router.get("/", (req, res) => {
   res.json(transactions);
 });
 
+// POST /api/transactions — Record a new transaction
+router.post("/", (req, res) => {
+  const db = getDb();
+  const { id, type, property_id, token_address, from_address, to_address, tokens, price_per_token_wei, total_amount_wei, tx_hash, block_number, status } = req.body;
+
+  if (!tx_hash) {
+    return res.status(400).json({ error: "tx_hash is required" });
+  }
+
+  try {
+    const result = db.prepare(
+      `INSERT OR IGNORE INTO transactions (id, type, property_id, token_address, from_address, to_address, tokens, price_per_token_wei, total_amount_wei, tx_hash, block_number, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      id || `tx-${tx_hash.slice(0, 16)}`,
+      type || "purchase",
+      property_id || null,
+      token_address || null,
+      from_address ? from_address.toLowerCase() : null,
+      to_address ? to_address.toLowerCase() : null,
+      tokens || 0,
+      price_per_token_wei || null,
+      total_amount_wei || null,
+      tx_hash,
+      block_number || null,
+      status || "confirmed"
+    );
+
+    // Update tokens_sold and status for purchase transactions
+    const txType = type || "purchase";
+    if (result.changes > 0 && txType === "purchase" && property_id && tokens) {
+      db.prepare(
+        `UPDATE properties
+         SET tokens_sold = tokens_sold + ?,
+             status = CASE
+               WHEN tokens_sold + ? >= total_tokens THEN 'funded'
+               ELSE 'funding'
+             END,
+             updated_at = datetime('now')
+         WHERE id = ?`
+      ).run(tokens, tokens, property_id);
+    }
+
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error("[Transactions] POST error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/transactions/:txHash — Get by tx hash
 router.get("/hash/:txHash", (req, res) => {
   const db = getDb();

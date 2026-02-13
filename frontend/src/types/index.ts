@@ -75,7 +75,7 @@ export interface Transaction {
   gasUsed?: string;
 }
 
-export type TransactionType = 'purchase' | 'sale' | 'transfer' | 'dividend';
+export type TransactionType = 'purchase' | 'sale' | 'transfer' | 'swap' | 'dividend';
 
 export type TransactionStatus = 'pending' | 'confirmed' | 'failed';
 

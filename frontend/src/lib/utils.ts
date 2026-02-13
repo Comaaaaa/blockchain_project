@@ -91,6 +91,7 @@ export function getTransactionTypeLabel(type: string): string {
     purchase: 'Achat',
     sale: 'Vente',
     transfer: 'Transfert',
+    swap: 'Swap',
     dividend: 'Dividende',
   };
   return labels[type] || type;

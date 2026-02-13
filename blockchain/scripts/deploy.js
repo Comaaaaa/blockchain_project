@@ -14,7 +14,8 @@ async function main() {
   console.log("ComplianceRegistry deployed at:", complianceAddr);
 
   // Whitelist the deployer
-  await compliance.addToWhitelist(deployer.address);
+  const txWL0 = await compliance.addToWhitelist(deployer.address);
+  await txWL0.wait();
   console.log("Deployer whitelisted:", deployer.address);
 
   // 2. Deploy PriceOracle
@@ -42,7 +43,8 @@ async function main() {
   console.log("PropertyToken (PAR7E) deployed at:", propertyTokenAddr);
 
   // Set initial price in oracle
-  await oracle.updatePrice(propertyTokenAddr, tokenPrice, 9500);
+  const txOracle = await oracle.updatePrice(propertyTokenAddr, tokenPrice, 9500);
+  await txOracle.wait();
   console.log("Oracle price set for PAR7E");
 
   // 4. Deploy PropertyNFT
@@ -75,9 +77,11 @@ async function main() {
 
   // 7. Whitelist contracts so they can hold tokens
   console.log("\n--- Whitelisting contracts ---");
-  await compliance.addToWhitelist(swapPoolAddr);
+  const txWL1 = await compliance.addToWhitelist(swapPoolAddr);
+  await txWL1.wait();
   console.log("SwapPool whitelisted");
-  await compliance.addToWhitelist(marketplaceAddr);
+  const txWL2 = await compliance.addToWhitelist(marketplaceAddr);
+  await txWL2.wait();
   console.log("Marketplace whitelisted");
 
   // 8. Provide initial liquidity to the pool
@@ -85,8 +89,11 @@ async function main() {
   const liquidityTokens = 200; // 200 tokens
   const liquidityETH = hre.ethers.parseEther("0.2"); // 0.2 ETH
 
-  await propertyToken.approve(swapPoolAddr, liquidityTokens);
-  await swapPool.addLiquidity(liquidityTokens, { value: liquidityETH });
+  const txApprove = await propertyToken.approve(swapPoolAddr, liquidityTokens);
+  await txApprove.wait();
+  console.log("Tokens approved for swap pool");
+  const txLiq = await swapPool.addLiquidity(liquidityTokens, { value: liquidityETH });
+  await txLiq.wait();
   console.log("Added liquidity: 200 PAR7E + 0.2 ETH");
 
   // Summary
