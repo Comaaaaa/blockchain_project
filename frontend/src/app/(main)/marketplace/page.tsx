@@ -8,61 +8,74 @@ import Button from '@/components/ui/Button';
 import { useMarketplaceContext } from '@/context/MarketplaceContext';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useTransactionContext } from '@/context/TransactionContext';
-import { simulateBuyFromListing } from '@/lib/blockchain';
+import { PropertyMarketplaceABI, getContractAddresses } from '@/lib/contracts';
 import { MarketplaceListing } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { PlusIcon } from '@heroicons/react/24/outline';
+import { useAccount, useWriteContract } from 'wagmi';
+import { parseEther } from 'viem';
 
 export default function MarketplacePage() {
-  const { activeListings, dispatch: marketplaceDispatch } = useMarketplaceContext();
+  const { activeListings, dispatch: marketplaceDispatch, refetch } = useMarketplaceContext();
   const { dispatch: portfolioDispatch } = usePortfolioContext();
   const { dispatch: txDispatch } = useTransactionContext();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [buying, setBuying] = useState<string | null>(null);
+  const { address, isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+  const addresses = getContractAddresses();
 
   const handleBuy = async (listing: MarketplaceListing) => {
+    if (!isConnected || !address) return;
     setBuying(listing.id);
 
     try {
-      const result = await simulateBuyFromListing(listing.id, listing.tokensForSale);
+      const totalPrice = BigInt(listing.tokensForSale) * BigInt(Math.floor(listing.pricePerToken));
 
-      if (result.success) {
-        marketplaceDispatch({
-          type: 'UPDATE_LISTING',
-          payload: { id: listing.id, updates: { status: 'sold' } },
-        });
+      const hash = await writeContractAsync({
+        address: addresses.PropertyMarketplace as `0x${string}`,
+        abi: PropertyMarketplaceABI,
+        functionName: 'buyListing',
+        args: [BigInt(listing.id)],
+        value: totalPrice,
+      });
 
-        portfolioDispatch({
-          type: 'ADD_HOLDING',
-          payload: {
-            propertyId: listing.propertyId,
-            tokens: listing.tokensForSale,
-            pricePerToken: listing.pricePerToken,
-          },
-        });
+      marketplaceDispatch({
+        type: 'UPDATE_LISTING',
+        payload: { id: listing.id, updates: { status: 'sold' } },
+      });
 
-        txDispatch({
-          type: 'ADD_TRANSACTION',
-          payload: {
-            id: uuidv4(),
-            type: 'purchase',
-            propertyId: listing.propertyId,
-            propertyTitle: listing.property.title,
-            from: listing.sellerAddress,
-            to: '0x1234567890AbcdEF1234567890aBcDeF12345678',
-            tokens: listing.tokensForSale,
-            pricePerToken: listing.pricePerToken,
-            totalAmount: listing.totalPrice,
-            txHash: result.txHash,
-            status: 'confirmed',
-            createdAt: new Date().toISOString(),
-            blockNumber: result.blockNumber,
-            gasUsed: result.gasUsed,
-          },
-        });
-      }
-    } catch {
-      // Error handled silently
+      portfolioDispatch({
+        type: 'ADD_HOLDING',
+        payload: {
+          propertyId: listing.propertyId,
+          tokens: listing.tokensForSale,
+          pricePerToken: listing.pricePerToken,
+        },
+      });
+
+      txDispatch({
+        type: 'ADD_TRANSACTION',
+        payload: {
+          id: uuidv4(),
+          type: 'purchase',
+          propertyId: listing.propertyId,
+          propertyTitle: listing.property.title,
+          from: listing.sellerAddress,
+          to: address,
+          tokens: listing.tokensForSale,
+          pricePerToken: listing.pricePerToken,
+          totalAmount: listing.totalPrice,
+          txHash: hash,
+          status: 'confirmed',
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      // Refetch from backend after some time (indexer will pick it up)
+      setTimeout(() => refetch(), 5000);
+    } catch (error: any) {
+      console.error('Buy failed:', error?.shortMessage || error?.message);
     } finally {
       setBuying(null);
     }
@@ -78,11 +91,17 @@ export default function MarketplacePage() {
           {activeListings.length} offre{activeListings.length > 1 ? 's' : ''} active
           {activeListings.length > 1 ? 's' : ''}
         </p>
-        <Button onClick={() => setShowCreateModal(true)}>
+        <Button onClick={() => setShowCreateModal(true)} disabled={!isConnected}>
           <PlusIcon className="h-5 w-5 mr-1" />
           Creer une offre
         </Button>
       </div>
+
+      {!isConnected && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-sm text-yellow-700">
+          Connectez votre wallet pour acheter ou vendre des tokens sur le marketplace.
+        </div>
+      )}
 
       <ListingGrid listings={activeListings} onBuy={handleBuy} />
 

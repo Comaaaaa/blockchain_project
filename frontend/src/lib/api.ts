@@ -1,0 +1,84 @@
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
+async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    ...options,
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(error.error || `API Error: ${res.status}`);
+  }
+  return res.json();
+}
+
+// Properties
+export const api = {
+  // Properties
+  getProperties: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return fetchApi<any[]>(`/properties${query}`);
+  },
+  getProperty: (id: string) => fetchApi<any>(`/properties/${id}`),
+  getFeaturedProperties: () => fetchApi<any[]>('/properties/featured'),
+  getPropertyTokenInfo: (id: string) => fetchApi<any>(`/properties/${id}/token-info`),
+  createProperty: (data: any) =>
+    fetchApi<any>('/properties', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Compliance / KYC
+  getComplianceStatus: (address: string) => fetchApi<any>(`/compliance/status/${address}`),
+  whitelistAddress: (address: string) =>
+    fetchApi<any>('/compliance/whitelist', {
+      method: 'POST',
+      body: JSON.stringify({ address }),
+    }),
+  batchWhitelist: (addresses: string[]) =>
+    fetchApi<any>('/compliance/whitelist/batch', {
+      method: 'POST',
+      body: JSON.stringify({ addresses }),
+    }),
+  blacklistAddress: (address: string) =>
+    fetchApi<any>('/compliance/blacklist', {
+      method: 'POST',
+      body: JSON.stringify({ address }),
+    }),
+  removeFromWhitelist: (address: string) =>
+    fetchApi<any>(`/compliance/whitelist/${address}`, { method: 'DELETE' }),
+  removeFromBlacklist: (address: string) =>
+    fetchApi<any>(`/compliance/blacklist/${address}`, { method: 'DELETE' }),
+  getComplianceUsers: () => fetchApi<any[]>('/compliance/users'),
+
+  // Marketplace
+  getActiveListings: () => fetchApi<any[]>('/marketplace/listings'),
+  getAllListings: () => fetchApi<any[]>('/marketplace/listings/all'),
+  getPoolInfo: () => fetchApi<any>('/marketplace/pool'),
+  getSwapQuote: (direction: string, amount: string) =>
+    fetchApi<any>(`/marketplace/pool/quote?direction=${direction}&amount=${amount}`),
+
+  // Transactions
+  getTransactions: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return fetchApi<any[]>(`/transactions${query}`);
+  },
+  getTransactionsByAddress: (address: string) =>
+    fetchApi<any[]>(`/transactions/address/${address}`),
+
+  // Oracle
+  getOraclePrice: (tokenAddress: string) => fetchApi<any>(`/oracle/price/${tokenAddress}`),
+  getAllPrices: () => fetchApi<any>('/oracle/prices'),
+  getPriceHistory: (tokenAddress: string, limit?: number) =>
+    fetchApi<any[]>(`/oracle/history/${tokenAddress}${limit ? `?limit=${limit}` : ''}`),
+
+  // NFTs
+  getNFTs: () => fetchApi<any[]>('/nfts'),
+  getNFT: (tokenId: number) => fetchApi<any>(`/nfts/${tokenId}`),
+  mintNFT: (data: any) =>
+    fetchApi<any>('/nfts/mint', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Contracts info
+  getContractAddresses: () => fetchApi<any>('/contracts'),
+  getABIs: () => fetchApi<any>('/contracts/abis'),
+
+  // Health
+  getHealth: () => fetchApi<any>('/health'),
+};

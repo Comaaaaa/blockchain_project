@@ -1,0 +1,19 @@
+node_modules/
+.env
+.env.local
+
+# Blockchain
+blockchain/cache/
+blockchain/artifacts/
+blockchain/deployed-addresses.json
+
+# Backend
+backend/tokenimmo.db
+
+# Frontend
+frontend/.next/
+frontend/out/
+
+# Misc
+.DS_Store
+*.log

@@ -1,0 +1,273 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import PageContainer from '@/components/layout/PageContainer';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Card from '@/components/ui/Card';
+import Badge from '@/components/ui/Badge';
+import { api } from '@/lib/api';
+import { shortenAddress } from '@/lib/utils';
+import { useAccount } from 'wagmi';
+import {
+  ShieldCheckIcon,
+  ShieldExclamationIcon,
+  UserPlusIcon,
+  NoSymbolIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/outline';
+
+interface ComplianceUser {
+  id: string;
+  wallet_address: string;
+  name: string;
+  is_whitelisted: number;
+  is_blacklisted: number;
+  kyc_timestamp: string;
+  created_at: string;
+}
+
+export default function AdminPage() {
+  const { address, isConnected } = useAccount();
+  const [users, setUsers] = useState<ComplianceUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addressInput, setAddressInput] = useState('');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Check current wallet compliance
+  const [walletStatus, setWalletStatus] = useState<any>(null);
+
+  const fetchUsers = async () => {
+    try {
+      const data = await api.getComplianceUsers();
+      setUsers(data);
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkWalletStatus = async () => {
+    if (!address) return;
+    try {
+      const status = await api.getComplianceStatus(address);
+      setWalletStatus(status);
+    } catch {
+      // Ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+    checkWalletStatus();
+  }, [address]);
+
+  const handleWhitelist = async () => {
+    if (!addressInput) return;
+    setActionLoading('whitelist');
+    setResult(null);
+    try {
+      const res = await api.whitelistAddress(addressInput);
+      setResult({ success: true, message: `Adresse whitelistee ! Tx: ${res.txHash?.slice(0, 10)}...` });
+      setAddressInput('');
+      fetchUsers();
+      checkWalletStatus();
+    } catch (error: any) {
+      setResult({ success: false, message: error.message });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleBlacklist = async () => {
+    if (!addressInput) return;
+    setActionLoading('blacklist');
+    setResult(null);
+    try {
+      const res = await api.blacklistAddress(addressInput);
+      setResult({ success: true, message: `Adresse blacklistee ! Tx: ${res.txHash?.slice(0, 10)}...` });
+      setAddressInput('');
+      fetchUsers();
+      checkWalletStatus();
+    } catch (error: any) {
+      setResult({ success: false, message: error.message });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRemoveWhitelist = async (addr: string) => {
+    setActionLoading(addr);
+    try {
+      await api.removeFromWhitelist(addr);
+      fetchUsers();
+      checkWalletStatus();
+    } catch (error: any) {
+      console.error(error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRemoveBlacklist = async (addr: string) => {
+    setActionLoading(addr);
+    try {
+      await api.removeFromBlacklist(addr);
+      fetchUsers();
+      checkWalletStatus();
+    } catch (error: any) {
+      console.error(error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  return (
+    <PageContainer
+      title="Administration KYC"
+      subtitle="Gestion de la conformite : whitelist et blacklist on-chain"
+    >
+      {/* Current wallet status */}
+      {isConnected && walletStatus && (
+        <Card className="p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-3">Statut de votre wallet</h3>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-gray-600 font-mono">{address}</p>
+            {walletStatus.isCompliant ? (
+              <Badge variant="success">
+                <ShieldCheckIcon className="h-4 w-4 mr-1" /> KYC Verifie
+              </Badge>
+            ) : walletStatus.isBlacklisted ? (
+              <Badge variant="danger">
+                <NoSymbolIcon className="h-4 w-4 mr-1" /> Blackliste
+              </Badge>
+            ) : (
+              <Badge variant="warning">
+                <ShieldExclamationIcon className="h-4 w-4 mr-1" /> Non verifie
+              </Badge>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Add to whitelist / blacklist */}
+      <Card className="p-6 mb-6">
+        <h3 className="text-lg font-semibold mb-4">Gerer une adresse</h3>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <Input
+              placeholder="0x... adresse Ethereum"
+              value={addressInput}
+              onChange={(e) => setAddressInput(e.target.value)}
+            />
+          </div>
+          <Button
+            onClick={handleWhitelist}
+            loading={actionLoading === 'whitelist'}
+            disabled={!addressInput}
+            className="whitespace-nowrap"
+          >
+            <UserPlusIcon className="h-5 w-5 mr-1" />
+            Whitelist (KYC)
+          </Button>
+          <Button
+            onClick={handleBlacklist}
+            loading={actionLoading === 'blacklist'}
+            disabled={!addressInput}
+            variant="outline"
+            className="whitespace-nowrap text-red-600 border-red-300 hover:!bg-red-50"
+          >
+            <NoSymbolIcon className="h-5 w-5 mr-1" />
+            Blacklist
+          </Button>
+        </div>
+
+        {result && (
+          <div
+            className={`mt-3 p-3 rounded-lg text-sm ${
+              result.success
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
+            {result.message}
+          </div>
+        )}
+      </Card>
+
+      {/* Users list */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Utilisateurs enregistres</h3>
+          <Button variant="outline" onClick={fetchUsers} size="sm">
+            <ArrowPathIcon className="h-4 w-4 mr-1" /> Actualiser
+          </Button>
+        </div>
+
+        {loading ? (
+          <p className="text-gray-500 text-center py-8">Chargement...</p>
+        ) : users.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">Aucun utilisateur enregistre.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-2 font-medium text-gray-500">Adresse</th>
+                  <th className="text-left py-3 px-2 font-medium text-gray-500">Statut</th>
+                  <th className="text-left py-3 px-2 font-medium text-gray-500">KYC Date</th>
+                  <th className="text-right py-3 px-2 font-medium text-gray-500">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.wallet_address} className="border-b border-gray-100">
+                    <td className="py-3 px-2 font-mono text-xs">
+                      {shortenAddress(user.wallet_address, 8)}
+                    </td>
+                    <td className="py-3 px-2">
+                      {user.is_blacklisted ? (
+                        <Badge variant="danger">Blackliste</Badge>
+                      ) : user.is_whitelisted ? (
+                        <Badge variant="success">Whitelist</Badge>
+                      ) : (
+                        <Badge variant="warning">Non verifie</Badge>
+                      )}
+                    </td>
+                    <td className="py-3 px-2 text-gray-500">
+                      {user.kyc_timestamp || '-'}
+                    </td>
+                    <td className="py-3 px-2 text-right">
+                      <div className="flex justify-end gap-2">
+                        {user.is_whitelisted ? (
+                          <button
+                            onClick={() => handleRemoveWhitelist(user.wallet_address)}
+                            disabled={actionLoading === user.wallet_address}
+                            className="text-xs text-red-600 hover:underline"
+                          >
+                            Retirer whitelist
+                          </button>
+                        ) : null}
+                        {user.is_blacklisted ? (
+                          <button
+                            onClick={() => handleRemoveBlacklist(user.wallet_address)}
+                            disabled={actionLoading === user.wallet_address}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Retirer blacklist
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </PageContainer>
+  );
+}

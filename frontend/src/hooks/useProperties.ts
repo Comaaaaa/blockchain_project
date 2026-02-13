@@ -1,7 +1,6 @@
 'use client';
 
 import { usePropertyContext } from '@/context/PropertyContext';
-import { properties as allProperties } from '@/data/properties';
 import { Property } from '@/types';
 
 export function useProperties() {
@@ -13,7 +12,7 @@ export function useProperties() {
   };
 
   const getCities = (): string[] => {
-    return [...new Set(allProperties.map((p) => p.city))].sort();
+    return [...new Set(state.properties.map((p) => p.city))].sort();
   };
 
   return {

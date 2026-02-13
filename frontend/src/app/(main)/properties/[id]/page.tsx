@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
-import { properties } from '@/data/properties';
+import { usePropertyContext } from '@/context/PropertyContext';
 import PageContainer from '@/components/layout/PageContainer';
 import TokenPurchaseForm from '@/components/property/TokenPurchaseForm';
 import Badge from '@/components/ui/Badge';
@@ -27,7 +27,8 @@ import {
 
 export default function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const property = properties.find((p) => p.id === id);
+  const { state } = usePropertyContext();
+  const property = state.properties.find((p) => p.id === id);
   const [selectedImage, setSelectedImage] = useState(0);
 
   if (!property) {
