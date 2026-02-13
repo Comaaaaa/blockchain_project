@@ -1,8 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { TokenHolding, PortfolioStats } from '@/types';
-import { properties } from '@/data/properties';
+import { TokenHolding, PortfolioStats, Property } from '@/types';
 
 interface PortfolioState {
   holdings: TokenHolding[];
@@ -10,63 +9,12 @@ interface PortfolioState {
 }
 
 type PortfolioAction =
-  | { type: 'ADD_HOLDING'; payload: { propertyId: string; tokens: number; pricePerToken: number } }
+  | { type: 'ADD_HOLDING'; payload: { propertyId: string; tokens: number; pricePerToken: number; property?: Property } }
   | { type: 'REMOVE_HOLDING'; payload: { propertyId: string; tokens: number } }
   | { type: 'SET_LOADING'; payload: boolean };
 
-const initialHoldings: TokenHolding[] = [
-  {
-    id: 'holding-001',
-    propertyId: 'prop-001',
-    property: properties.find((p) => p.id === 'prop-001')!,
-    tokens: 10,
-    purchasePrice: 850,
-    currentValue: 870,
-    totalInvested: 8500,
-    unrealizedGain: 200,
-    unrealizedGainPercent: 2.35,
-    purchaseDate: '2024-02-15T10:30:00Z',
-  },
-  {
-    id: 'holding-002',
-    propertyId: 'prop-002',
-    property: properties.find((p) => p.id === 'prop-002')!,
-    tokens: 15,
-    purchasePrice: 520,
-    currentValue: 535,
-    totalInvested: 7800,
-    unrealizedGain: 225,
-    unrealizedGainPercent: 2.88,
-    purchaseDate: '2024-02-20T14:15:00Z',
-  },
-  {
-    id: 'holding-003',
-    propertyId: 'prop-004',
-    property: properties.find((p) => p.id === 'prop-004')!,
-    tokens: 5,
-    purchasePrice: 680,
-    currentValue: 700,
-    totalInvested: 3400,
-    unrealizedGain: 100,
-    unrealizedGainPercent: 2.94,
-    purchaseDate: '2024-03-01T09:45:00Z',
-  },
-  {
-    id: 'holding-004',
-    propertyId: 'prop-006',
-    property: properties.find((p) => p.id === 'prop-006')!,
-    tokens: 15,
-    purchasePrice: 633,
-    currentValue: 650,
-    totalInvested: 9495,
-    unrealizedGain: 255,
-    unrealizedGainPercent: 2.69,
-    purchaseDate: '2024-03-18T11:00:00Z',
-  },
-];
-
 const initialState: PortfolioState = {
-  holdings: initialHoldings,
+  holdings: [],
   loading: false,
 };
 
@@ -90,13 +38,50 @@ function portfolioReducer(state: PortfolioState, action: PortfolioAction): Portf
                   totalInvested: newTotalInvested,
                   unrealizedGain: newTokens * h.currentValue - newTotalInvested,
                   unrealizedGainPercent:
-                    ((newTokens * h.currentValue - newTotalInvested) / newTotalInvested) * 100,
+                    newTotalInvested > 0
+                      ? ((newTokens * h.currentValue - newTotalInvested) / newTotalInvested) * 100
+                      : 0,
                 }
               : h
           ),
         };
       }
-      const property = properties.find((p) => p.id === action.payload.propertyId)!;
+      // Create a minimal property object if not provided
+      const property: Property = action.payload.property || {
+        id: action.payload.propertyId,
+        title: action.payload.propertyId,
+        description: '',
+        address: '',
+        city: '',
+        zipCode: '',
+        country: 'France',
+        type: 'apartment',
+        price: 0,
+        surface: 0,
+        rooms: 0,
+        bedrooms: 0,
+        yearBuilt: 2000,
+        images: [],
+        tokenInfo: {
+          totalTokens: 0,
+          availableTokens: 0,
+          tokenPrice: action.payload.pricePerToken,
+          tokenSymbol: '',
+          blockchain: 'Ethereum Sepolia',
+        },
+        financials: {
+          annualRent: 0,
+          annualCharges: 0,
+          netYield: 0,
+          grossYield: 0,
+          monthlyRent: 0,
+          occupancyRate: 0,
+        },
+        status: 'available',
+        owner: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
       const newHolding: TokenHolding = {
         id: `holding-${Date.now()}`,
         propertyId: action.payload.propertyId,
@@ -132,7 +117,9 @@ function portfolioReducer(state: PortfolioState, action: PortfolioAction): Portf
                 totalInvested: remainingInvested,
                 unrealizedGain: remainingTokens * h.currentValue - remainingInvested,
                 unrealizedGainPercent:
-                  ((remainingTokens * h.currentValue - remainingInvested) / remainingInvested) * 100,
+                  remainingInvested > 0
+                    ? ((remainingTokens * h.currentValue - remainingInvested) / remainingInvested) * 100
+                    : 0,
               }
             : h
         ),
@@ -160,10 +147,13 @@ function calculateStats(holdings: TokenHolding[]): PortfolioStats {
   const totalGainPercent = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
   const totalTokens = holdings.reduce((sum, h) => sum + h.tokens, 0);
 
-  const yields = holdings.map((h) => h.property.financials.netYield);
+  const yields = holdings
+    .filter((h) => h.property.financials.netYield > 0)
+    .map((h) => h.property.financials.netYield);
   const averageYield = yields.length > 0 ? yields.reduce((a, b) => a + b, 0) / yields.length : 0;
 
   const monthlyIncome = holdings.reduce((sum, h) => {
+    if (h.property.tokenInfo.totalTokens === 0) return sum;
     const tokenShare = h.tokens / h.property.tokenInfo.totalTokens;
     return sum + h.property.financials.monthlyRent * tokenShare;
   }, 0);

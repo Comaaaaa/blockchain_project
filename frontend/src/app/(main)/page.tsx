@@ -1,30 +1,19 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import PropertyCard from '@/components/property/PropertyCard';
-import { properties, featuredPropertyIds } from '@/data/properties';
+import { usePropertyContext } from '@/context/PropertyContext';
 import {
   BuildingOffice2Icon,
   CurrencyEuroIcon,
   ShieldCheckIcon,
   Square3Stack3DIcon,
-  UserGroupIcon,
-  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 import { formatCurrency } from '@/lib/utils';
-
-const featuredProperties = properties.filter((p) => featuredPropertyIds.includes(p.id));
-
-const stats = {
-  totalProperties: properties.length,
-  totalInvestors: 2847,
-  totalTokenized: properties.reduce((sum, p) => sum + p.price, 0),
-  averageYield:
-    properties.reduce((sum, p) => sum + p.financials.netYield, 0) / properties.length,
-};
 
 const steps = [
   {
@@ -48,6 +37,21 @@ const steps = [
 ];
 
 export default function HomePage() {
+  const { state } = usePropertyContext();
+  const allProperties = state.properties;
+
+  const featuredProperties = allProperties.slice(0, 4);
+
+  const stats = {
+    totalProperties: allProperties.length,
+    totalInvestors: 2847,
+    totalTokenized: allProperties.reduce((sum, p) => sum + p.price, 0),
+    averageYield:
+      allProperties.length > 0
+        ? allProperties.reduce((sum, p) => sum + p.financials.netYield, 0) / allProperties.length
+        : 0,
+  };
+
   return (
     <div>
       {/* Hero */}
@@ -83,7 +87,7 @@ export default function HomePage() {
             </div>
             <div className="mt-8 flex items-center gap-2 text-sm text-gray-400">
               <ShieldCheckIcon className="h-5 w-5" />
-              <span>Blockchain Ethereum Sepolia - Projet educatif</span>
+              <span>Blockchain Ethereum Sepolia - Smart contracts on-chain</span>
             </div>
           </div>
         </div>

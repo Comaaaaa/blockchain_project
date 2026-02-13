@@ -15,8 +15,10 @@ import { cn } from '@/lib/utils';
 const navigation = [
   { name: 'Biens', href: '/properties' },
   { name: 'Marketplace', href: '/marketplace' },
+  { name: 'Swap', href: '/swap' },
   { name: 'Portfolio', href: '/portfolio' },
   { name: 'Transactions', href: '/transactions' },
+  { name: 'Admin KYC', href: '/admin' },
 ];
 
 export default function Header() {

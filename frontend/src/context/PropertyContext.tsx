@@ -1,8 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { Property, PropertyFilters } from '@/types';
-import { properties as mockProperties } from '@/data/properties';
+import { api } from '@/lib/api';
 
 interface PropertyState {
   properties: Property[];
@@ -13,6 +13,7 @@ interface PropertyState {
 }
 
 type PropertyAction =
+  | { type: 'SET_PROPERTIES'; payload: Property[] }
   | { type: 'SET_FILTERS'; payload: Partial<PropertyFilters> }
   | { type: 'RESET_FILTERS' }
   | { type: 'SET_PAGE'; payload: number }
@@ -35,15 +36,17 @@ const defaultFilters: PropertyFilters = {
 };
 
 const initialState: PropertyState = {
-  properties: mockProperties,
+  properties: [],
   filters: defaultFilters,
-  loading: false,
+  loading: true,
   currentPage: 1,
   itemsPerPage: 9,
 };
 
 function propertyReducer(state: PropertyState, action: PropertyAction): PropertyState {
   switch (action.type) {
+    case 'SET_PROPERTIES':
+      return { ...state, properties: action.payload, loading: false };
     case 'SET_FILTERS':
       return { ...state, filters: { ...state.filters, ...action.payload }, currentPage: 1 };
     case 'RESET_FILTERS':
@@ -72,9 +75,49 @@ interface PropertyContextType {
   filteredProperties: Property[];
   totalPages: number;
   paginatedProperties: Property[];
+  refetch: () => void;
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined);
+
+function mapApiProperty(p: any): Property {
+  return {
+    id: p.id,
+    title: p.title,
+    description: p.description || '',
+    address: p.address || '',
+    city: p.city || '',
+    zipCode: p.zip_code || '',
+    country: 'France',
+    type: p.type || 'apartment',
+    price: p.price || 0,
+    surface: p.surface || 0,
+    rooms: p.rooms || 0,
+    bedrooms: p.bedrooms || 0,
+    yearBuilt: p.year_built || 2000,
+    images: p.images || [],
+    tokenInfo: {
+      totalTokens: p.total_tokens || 0,
+      availableTokens: p.total_tokens || 0,
+      tokenPrice: p.price && p.total_tokens ? Math.round(p.price / p.total_tokens) : 0,
+      tokenSymbol: p.token_symbol || '',
+      contractAddress: p.token_address || undefined,
+      blockchain: 'Ethereum Sepolia',
+    },
+    financials: {
+      annualRent: p.annual_rent || 0,
+      annualCharges: p.annual_charges || 0,
+      netYield: p.net_yield || 0,
+      grossYield: p.gross_yield || 0,
+      monthlyRent: (p.annual_rent || 0) / 12,
+      occupancyRate: p.occupancy_rate || 95,
+    },
+    status: p.status || 'available',
+    owner: 'TokenImmo',
+    createdAt: p.created_at || new Date().toISOString(),
+    updatedAt: p.updated_at || new Date().toISOString(),
+  };
+}
 
 function applyFilters(properties: Property[], filters: PropertyFilters): Property[] {
   let result = [...properties];
@@ -125,7 +168,6 @@ function applyFilters(properties: Property[], filters: PropertyFilters): Propert
     result = result.filter((p) => p.financials.netYield <= filters.maxYield);
   }
 
-  // Sorting
   switch (filters.sortBy) {
     case 'price-asc':
       result.sort((a, b) => a.price - b.price);
@@ -154,6 +196,24 @@ function applyFilters(properties: Property[], filters: PropertyFilters): Propert
 export function PropertyProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(propertyReducer, initialState);
 
+  const fetchProperties = async () => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const data = await api.getProperties();
+      dispatch({ type: 'SET_PROPERTIES', payload: data.map(mapApiProperty) });
+    } catch (error) {
+      console.error('Failed to fetch properties:', error);
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  };
+
+  useEffect(() => {
+    fetchProperties();
+    // Poll every 60 seconds to stay in sync with indexer
+    const interval = setInterval(fetchProperties, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const filteredProperties = applyFilters(state.properties, state.filters);
   const totalPages = Math.ceil(filteredProperties.length / state.itemsPerPage);
   const start = (state.currentPage - 1) * state.itemsPerPage;
@@ -161,7 +221,7 @@ export function PropertyProvider({ children }: { children: ReactNode }) {
 
   return (
     <PropertyContext.Provider
-      value={{ state, dispatch, filteredProperties, totalPages, paginatedProperties }}
+      value={{ state, dispatch, filteredProperties, totalPages, paginatedProperties, refetch: fetchProperties }}
     >
       {children}
     </PropertyContext.Provider>

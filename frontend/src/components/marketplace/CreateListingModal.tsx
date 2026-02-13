@@ -3,14 +3,14 @@
 import { useState } from 'react';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useMarketplaceContext } from '@/context/MarketplaceContext';
-import { useTransactionContext } from '@/context/TransactionContext';
-import { simulateCreateListing } from '@/lib/blockchain';
+import { PropertyTokenABI, PropertyMarketplaceABI, getContractAddresses } from '@/lib/contracts';
 import { formatCurrency } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { v4 as uuidv4 } from 'uuid';
+import { useAccount, useWriteContract } from 'wagmi';
+import { parseEther } from 'viem';
 
 interface CreateListingModalProps {
   isOpen: boolean;
@@ -19,7 +19,11 @@ interface CreateListingModalProps {
 
 export default function CreateListingModal({ isOpen, onClose }: CreateListingModalProps) {
   const { state: portfolioState } = usePortfolioContext();
-  const { dispatch: marketplaceDispatch } = useMarketplaceContext();
+  const { refetch } = useMarketplaceContext();
+  const { address, isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+  const addresses = getContractAddresses();
+
   const [selectedProperty, setSelectedProperty] = useState('');
   const [tokens, setTokens] = useState(1);
   const [pricePerToken, setPricePerToken] = useState(0);
@@ -37,47 +41,54 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
   ];
 
   const handleCreate = async () => {
-    if (!holding || tokens < 1 || pricePerToken < 1) return;
+    if (!holding || tokens < 1 || pricePerToken < 1 || !isConnected) return;
 
     setLoading(true);
     setResult(null);
 
     try {
-      const txResult = await simulateCreateListing(selectedProperty, tokens, pricePerToken);
-
-      if (txResult.success) {
-        marketplaceDispatch({
-          type: 'ADD_LISTING',
-          payload: {
-            id: uuidv4(),
-            sellerId: 'demo-user',
-            sellerAddress: '0x1234567890AbcdEF1234567890aBcDeF12345678',
-            propertyId: selectedProperty,
-            property: holding.property,
-            tokensForSale: tokens,
-            pricePerToken,
-            totalPrice: tokens * pricePerToken,
-            status: 'active',
-            createdAt: new Date().toISOString(),
-          },
-        });
-
-        setResult({ success: true, message: 'Offre creee avec succes !' });
-        setTimeout(() => {
-          onClose();
-          setResult(null);
-          setSelectedProperty('');
-          setTokens(1);
-          setPricePerToken(0);
-        }, 1500);
-      } else {
-        setResult({
-          success: false,
-          message: txResult.error || 'Erreur lors de la creation.',
-        });
+      const tokenAddr = holding.property.tokenInfo.contractAddress;
+      if (!tokenAddr) {
+        setResult({ success: false, message: 'Pas de contrat token pour ce bien.' });
+        setLoading(false);
+        return;
       }
-    } catch {
-      setResult({ success: false, message: 'Erreur inattendue.' });
+
+      const priceWei = parseEther(String(pricePerToken / 1000)); // Convert EUR-like price to ETH
+
+      // 1. Approve marketplace to spend tokens
+      await writeContractAsync({
+        address: tokenAddr as `0x${string}`,
+        abi: PropertyTokenABI,
+        functionName: 'approve',
+        args: [addresses.PropertyMarketplace as `0x${string}`, BigInt(tokens)],
+      });
+
+      // 2. Create listing on marketplace
+      const hash = await writeContractAsync({
+        address: addresses.PropertyMarketplace as `0x${string}`,
+        abi: PropertyMarketplaceABI,
+        functionName: 'createListing',
+        args: [tokenAddr as `0x${string}`, BigInt(tokens), priceWei],
+      });
+
+      setResult({ success: true, message: `Offre creee avec succes ! Tx: ${hash.slice(0, 10)}...` });
+      setTimeout(() => {
+        onClose();
+        setResult(null);
+        setSelectedProperty('');
+        setTokens(1);
+        setPricePerToken(0);
+        refetch();
+      }, 1500);
+    } catch (error: any) {
+      const msg = error?.shortMessage || error?.message || 'Erreur lors de la creation.';
+      setResult({
+        success: false,
+        message: msg.includes('not KYC')
+          ? 'Vous devez etre verifie KYC pour creer une offre.'
+          : msg,
+      });
     } finally {
       setLoading(false);
     }
@@ -136,7 +147,7 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
             <Button
               onClick={handleCreate}
               loading={loading}
-              disabled={tokens < 1 || pricePerToken < 1}
+              disabled={tokens < 1 || pricePerToken < 1 || !isConnected}
               className="w-full"
             >
               Mettre en vente

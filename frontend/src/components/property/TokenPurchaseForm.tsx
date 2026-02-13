@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { Property } from '@/types';
 import { formatCurrency } from '@/lib/utils';
-import { simulateTokenPurchase } from '@/lib/blockchain';
+import { PropertyTokenABI, getContractAddresses } from '@/lib/contracts';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useTransactionContext } from '@/context/TransactionContext';
 import Button from '@/components/ui/Button';
 import { v4 as uuidv4 } from 'uuid';
-import { generateTxHash } from '@/lib/utils';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseEther } from 'viem';
 
 interface TokenPurchaseFormProps {
   property: Property;
@@ -20,9 +21,12 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const { dispatch: portfolioDispatch } = usePortfolioContext();
   const { dispatch: txDispatch } = useTransactionContext();
+  const { address, isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
 
   const totalCost = tokens * property.tokenInfo.tokenPrice;
   const maxTokens = property.tokenInfo.availableTokens;
+  const tokenAddress = property.tokenInfo.contractAddress;
 
   const handlePurchase = async () => {
     if (tokens < 1 || tokens > maxTokens) return;
@@ -31,75 +35,68 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
     setResult(null);
 
     try {
-      const txResult = await simulateTokenPurchase(
-        property.id,
-        tokens,
-        property.tokenInfo.tokenPrice
-      );
-
-      if (txResult.success) {
-        portfolioDispatch({
-          type: 'ADD_HOLDING',
-          payload: {
-            propertyId: property.id,
-            tokens,
-            pricePerToken: property.tokenInfo.tokenPrice,
-          },
-        });
-
-        txDispatch({
-          type: 'ADD_TRANSACTION',
-          payload: {
-            id: uuidv4(),
-            type: 'purchase',
-            propertyId: property.id,
-            propertyTitle: property.title,
-            from: '0x0000000000000000000000000000000000000000',
-            to: '0x1234567890AbcdEF1234567890aBcDeF12345678',
-            tokens,
-            pricePerToken: property.tokenInfo.tokenPrice,
-            totalAmount: totalCost,
-            txHash: txResult.txHash,
-            status: 'confirmed',
-            createdAt: new Date().toISOString(),
-            blockNumber: txResult.blockNumber,
-            gasUsed: txResult.gasUsed,
-          },
-        });
-
-        setResult({
-          success: true,
-          message: `Achat de ${tokens} token${tokens > 1 ? 's' : ''} ${property.tokenInfo.tokenSymbol} confirme !`,
-        });
-        setTokens(1);
-      } else {
-        txDispatch({
-          type: 'ADD_TRANSACTION',
-          payload: {
-            id: uuidv4(),
-            type: 'purchase',
-            propertyId: property.id,
-            propertyTitle: property.title,
-            from: '0x0000000000000000000000000000000000000000',
-            to: '0x1234567890AbcdEF1234567890aBcDeF12345678',
-            tokens,
-            pricePerToken: property.tokenInfo.tokenPrice,
-            totalAmount: totalCost,
-            txHash: txResult.txHash,
-            status: 'failed',
-            createdAt: new Date().toISOString(),
-          },
-        });
-
-        setResult({
-          success: false,
-          message: txResult.error || 'La transaction a echoue. Veuillez reessayer.',
-        });
+      if (!isConnected || !address) {
+        setResult({ success: false, message: 'Veuillez connecter votre wallet.' });
+        setLoading(false);
+        return;
       }
-    } catch {
+
+      if (!tokenAddress) {
+        setResult({ success: false, message: 'Ce bien n\'a pas encore de token deploye on-chain.' });
+        setLoading(false);
+        return;
+      }
+
+      // Call buyTokens on the PropertyToken contract
+      const hash = await writeContractAsync({
+        address: tokenAddress as `0x${string}`,
+        abi: PropertyTokenABI,
+        functionName: 'buyTokens',
+        args: [BigInt(tokens)],
+        value: parseEther('0.001') * BigInt(tokens), // tokenPrice * tokens
+      });
+
+      // Record transaction
+      txDispatch({
+        type: 'ADD_TRANSACTION',
+        payload: {
+          id: uuidv4(),
+          type: 'purchase',
+          propertyId: property.id,
+          propertyTitle: property.title,
+          from: '0x0000000000000000000000000000000000000000',
+          to: address,
+          tokens,
+          pricePerToken: property.tokenInfo.tokenPrice,
+          totalAmount: totalCost,
+          txHash: hash,
+          status: 'confirmed',
+          createdAt: new Date().toISOString(),
+        },
+      });
+
+      portfolioDispatch({
+        type: 'ADD_HOLDING',
+        payload: {
+          propertyId: property.id,
+          tokens,
+          pricePerToken: property.tokenInfo.tokenPrice,
+          property,
+        },
+      });
+
+      setResult({
+        success: true,
+        message: `Achat de ${tokens} token${tokens > 1 ? 's' : ''} ${property.tokenInfo.tokenSymbol} confirme ! Tx: ${hash.slice(0, 10)}...`,
+      });
+      setTokens(1);
+    } catch (error: any) {
+      const msg = error?.shortMessage || error?.message || 'Transaction echouee';
       setResult({
         success: false,
-        message: 'Erreur inattendue. Veuillez reessayer.',
+        message: msg.includes('not KYC')
+          ? 'Vous devez etre verifie KYC (whitelist) pour acheter des tokens.'
+          : msg,
       });
     } finally {
       setLoading(false);
@@ -120,6 +117,12 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Acheter des tokens</h3>
+
+      {!isConnected && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-700">
+          Connectez votre wallet pour acheter des tokens on-chain.
+        </div>
+      )}
 
       <div className="space-y-4">
         <div>
@@ -152,7 +155,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
             </button>
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            {maxTokens} tokens disponibles - Max par transaction: {Math.min(maxTokens, 1000)}
+            {maxTokens} tokens disponibles
           </p>
         </div>
 
@@ -178,7 +181,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         <Button
           onClick={handlePurchase}
           loading={loading}
-          disabled={tokens < 1 || tokens > maxTokens}
+          disabled={tokens < 1 || tokens > maxTokens || !isConnected}
           className="w-full"
           size="lg"
         >
@@ -198,8 +201,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         )}
 
         <p className="text-xs text-gray-400 text-center">
-          Les transactions sont simulees sur le testnet Sepolia. Aucun argent reel n&apos;est
-          implique.
+          Transactions on-chain sur Ethereum Sepolia (testnet).
         </p>
       </div>
     </div>

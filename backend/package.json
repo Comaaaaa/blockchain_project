@@ -1,0 +1,20 @@
+{
+  "name": "tokenimmo-backend",
+  "version": "1.0.0",
+  "description": "Backend API, Indexer & Oracle for TokenImmo",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "indexer": "node src/services/indexer.js",
+    "seed": "node src/db/seed.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.0",
+    "ethers": "^6.13.0",
+    "express": "^4.18.0",
+    "node-cron": "^3.0.3"
+  }
+}
