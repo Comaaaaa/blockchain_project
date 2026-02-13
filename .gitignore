@@ -9,6 +9,8 @@ blockchain/deployed-addresses.json
 
 # Backend
 backend/tokenimmo.db
+backend/tokenimmo.db-shm
+backend/tokenimmo.db-wal
 
 # Frontend
 frontend/.next/

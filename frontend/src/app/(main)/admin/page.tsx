@@ -4,17 +4,20 @@ import { useState, useEffect } from 'react';
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { api } from '@/lib/api';
 import { shortenAddress } from '@/lib/utils';
 import { useAccount } from 'wagmi';
+import { parseEther } from 'viem';
 import {
   ShieldCheckIcon,
   ShieldExclamationIcon,
   UserPlusIcon,
   NoSymbolIcon,
   ArrowPathIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 
 interface ComplianceUser {
@@ -34,6 +37,15 @@ export default function AdminPage() {
   const [addressInput, setAddressInput] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Mint NFT states
+  const [mintTo, setMintTo] = useState('');
+  const [mintUri, setMintUri] = useState('');
+  const [mintAssetType, setMintAssetType] = useState('property_deed');
+  const [mintLocation, setMintLocation] = useState('');
+  const [mintValuation, setMintValuation] = useState('');
+  const [mintLoading, setMintLoading] = useState(false);
+  const [mintResult, setMintResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Check current wallet compliance
   const [walletStatus, setWalletStatus] = useState<any>(null);
@@ -121,6 +133,35 @@ export default function AdminPage() {
       console.error(error);
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleMintNFT = async () => {
+    if (!mintTo || !mintUri || !mintLocation || !mintValuation) return;
+    setMintLoading(true);
+    setMintResult(null);
+    try {
+      const valuationWei = parseEther(mintValuation).toString();
+      const res = await api.mintNFT({
+        to: mintTo,
+        uri: mintUri,
+        assetType: mintAssetType,
+        location: mintLocation,
+        valuationWei: valuationWei,
+      });
+      setMintResult({
+        success: true,
+        message: `NFT minte avec succes ! Token ID: ${res.tokenId ?? res.token_id}`,
+      });
+      setMintTo('');
+      setMintUri('');
+      setMintAssetType('property_deed');
+      setMintLocation('');
+      setMintValuation('');
+    } catch (error: any) {
+      setMintResult({ success: false, message: error.message });
+    } finally {
+      setMintLoading(false);
     }
   };
 
@@ -265,6 +306,69 @@ export default function AdminPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </Card>
+      {/* Mint NFT */}
+      <Card className="p-6 mt-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <SparklesIcon className="h-5 w-5 text-orange" />
+          Minter un NFT (TIMMO)
+        </h3>
+        <div className="space-y-3">
+          <Input
+            placeholder="0x... adresse destinataire"
+            value={mintTo}
+            onChange={(e) => setMintTo(e.target.value)}
+          />
+          <Input
+            placeholder="Token URI (ex: ipfs://...)"
+            value={mintUri}
+            onChange={(e) => setMintUri(e.target.value)}
+          />
+          <Select
+            label="Type d'actif"
+            value={mintAssetType}
+            onChange={(e) => setMintAssetType(e.target.value)}
+            options={[
+              { value: 'property_deed', label: 'Titre de propriete' },
+              { value: 'artwork', label: "Oeuvre d'art" },
+              { value: 'collectible', label: 'Objet de collection' },
+            ]}
+          />
+          <Input
+            placeholder="Localisation (ex: Paris 8e)"
+            value={mintLocation}
+            onChange={(e) => setMintLocation(e.target.value)}
+          />
+          <Input
+            placeholder="Valorisation en ETH (ex: 1.5)"
+            value={mintValuation}
+            onChange={(e) => setMintValuation(e.target.value)}
+            type="number"
+            step="0.0001"
+            min="0"
+          />
+          <Button
+            onClick={handleMintNFT}
+            loading={mintLoading}
+            disabled={!mintTo || !mintUri || !mintLocation || !mintValuation}
+            className="w-full"
+          >
+            <SparklesIcon className="h-5 w-5 mr-1" />
+            Minter le NFT
+          </Button>
+        </div>
+
+        {mintResult && (
+          <div
+            className={`mt-3 p-3 rounded-lg text-sm ${
+              mintResult.success
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
+            {mintResult.message}
           </div>
         )}
       </Card>

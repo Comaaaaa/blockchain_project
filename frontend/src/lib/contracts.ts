@@ -51,6 +51,13 @@ export const PriceOracleABI = [
   { inputs: [{ name: 'token', type: 'address' }, { name: 'maxAge', type: 'uint256' }], name: 'isPriceStale', outputs: [{ type: 'bool' }], stateMutability: 'view', type: 'function' },
 ] as const;
 
+export const PropertyNFTABI = [
+  { inputs: [{ name: 'tokenId', type: 'uint256' }], name: 'ownerOf', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ name: 'tokenId', type: 'uint256' }], name: 'tokenURI', outputs: [{ type: 'string' }], stateMutability: 'view', type: 'function' },
+  { inputs: [], name: 'totalMinted', outputs: [{ type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ name: 'tokenId', type: 'uint256' }], name: 'nftMetadata', outputs: [{ name: 'assetType', type: 'string' }, { name: 'location', type: 'string' }, { name: 'valuation', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+] as const;
+
 // Contract addresses — loaded from backend or env
 export function getContractAddresses(): Record<string, string> {
   return {

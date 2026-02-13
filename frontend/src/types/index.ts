@@ -146,3 +146,15 @@ export interface Toast {
   message?: string;
   duration?: number;
 }
+
+export type NFTAssetType = 'property_deed' | 'artwork' | 'collectible';
+
+export interface NFT {
+  tokenId: number;
+  ownerAddress: string;
+  assetType: NFTAssetType;
+  location: string;
+  valuationWei: string;
+  tokenUri: string;
+  createdAt: string;
+}

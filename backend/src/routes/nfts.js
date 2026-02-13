@@ -11,12 +11,27 @@ router.get("/", (req, res) => {
   res.json(nfts);
 });
 
-// GET /api/nfts/:tokenId — Get single NFT
+// GET /api/nfts/:tokenId — Get single NFT (from DB, with on-chain fallback)
 router.get("/:tokenId", async (req, res) => {
+  const tokenId = parseInt(req.params.tokenId);
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM nfts WHERE token_id = ?").get(tokenId);
+
+  if (row) {
+    return res.json({
+      tokenId: row.token_id,
+      owner: row.owner_address,
+      tokenURI: row.token_uri,
+      assetType: row.asset_type,
+      location: row.location,
+      valuationWei: row.valuation_wei,
+      createdAt: row.created_at,
+    });
+  }
+
+  // Fallback: try on-chain
   try {
     const nft = await getContract("PropertyNFT");
-    const tokenId = parseInt(req.params.tokenId);
-
     const [owner, uri, metadata] = await Promise.all([
       nft.ownerOf(tokenId),
       nft.tokenURI(tokenId),
@@ -33,7 +48,7 @@ router.get("/:tokenId", async (req, res) => {
       mintedAt: Number(metadata.mintedAt),
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(404).json({ error: "NFT not found" });
   }
 });
 
@@ -53,30 +68,26 @@ router.post("/mint", async (req, res) => {
     const tx = await nft.mintAsset(to, uri, assetType, location || "", valuation);
     const receipt = await tx.wait();
 
-    // Find the NFTMinted event
-    const event = receipt.logs.find((log) => {
-      try {
-        const parsed = nft.interface.parseLog(log);
-        return parsed.name === "NFTMinted";
-      } catch {
-        return false;
-      }
-    });
-
+    // Decode tokenId from ERC-721 Transfer event (raw log topics)
+    // Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
+    const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
     let tokenId = null;
-    if (event) {
-      const parsed = nft.interface.parseLog(event);
-      tokenId = Number(parsed.args[0]);
+    for (const log of receipt.logs) {
+      if (log.topics[0] === TRANSFER_TOPIC && log.topics.length === 4) {
+        const from = "0x" + log.topics[1].slice(26);
+        if (from === "0x" + "0".repeat(40)) {
+          tokenId = Number(BigInt(log.topics[3]));
+          break;
+        }
+      }
     }
 
     // Save to local DB
     const db = getDb();
-    if (tokenId !== null) {
-      db.prepare(
-        `INSERT OR REPLACE INTO nfts (token_id, owner_address, asset_type, location, valuation_wei, token_uri)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(tokenId, to.toLowerCase(), assetType, location || "", valuation.toString(), uri);
-    }
+    db.prepare(
+      `INSERT OR REPLACE INTO nfts (token_id, owner_address, asset_type, location, valuation_wei, token_uri)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(tokenId, to.toLowerCase(), assetType, location || "", valuation.toString(), uri);
 
     res.status(201).json({
       success: true,
