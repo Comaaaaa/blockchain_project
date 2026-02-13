@@ -62,6 +62,20 @@ export const api = {
   },
   getTransactionsByAddress: (address: string) =>
     fetchApi<any[]>(`/transactions/address/${address}`),
+  postTransaction: (data: {
+    type: string;
+    property_id?: string;
+    token_address?: string;
+    from_address?: string;
+    to_address?: string;
+    tokens?: number;
+    price_per_token_wei?: string;
+    total_amount_wei?: string;
+    tx_hash: string;
+    block_number?: number;
+    status?: string;
+  }) =>
+    fetchApi<any>('/transactions', { method: 'POST', body: JSON.stringify(data) }),
 
   // Oracle
   getOraclePrice: (tokenAddress: string) => fetchApi<any>(`/oracle/price/${tokenAddress}`),

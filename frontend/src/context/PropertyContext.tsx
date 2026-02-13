@@ -98,7 +98,7 @@ function mapApiProperty(p: any): Property {
     images: p.images || [],
     tokenInfo: {
       totalTokens: p.total_tokens || 0,
-      availableTokens: p.total_tokens || 0,
+      availableTokens: (p.total_tokens || 0) - (p.tokens_sold || 0),
       tokenPrice: p.price && p.total_tokens ? Math.round(p.price / p.total_tokens) : 0,
       tokenSymbol: p.token_symbol || '',
       contractAddress: p.token_address || undefined,

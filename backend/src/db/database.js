@@ -37,6 +37,7 @@ function initTables() {
       token_symbol TEXT,
       token_name TEXT,
       total_tokens INTEGER,
+      tokens_sold INTEGER DEFAULT 0,
       token_price_wei TEXT,
       annual_rent REAL,
       annual_charges REAL,
@@ -105,6 +106,16 @@ function initTables() {
       value TEXT NOT NULL
     );
 
+  `);
+
+  // Migration: add tokens_sold column to existing databases
+  try {
+    db.exec(`ALTER TABLE properties ADD COLUMN tokens_sold INTEGER DEFAULT 0`);
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS nfts (
       token_id INTEGER PRIMARY KEY,
       owner_address TEXT,

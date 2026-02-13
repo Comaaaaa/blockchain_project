@@ -7,8 +7,10 @@ import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import { api } from '@/lib/api';
 import { TokenSwapPoolABI, PropertyTokenABI, getContractAddresses } from '@/lib/contracts';
+import { useTransactionContext } from '@/context/TransactionContext';
 import { useAccount, useWriteContract } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
+import { v4 as uuidv4 } from 'uuid';
 import {
   ArrowsRightLeftIcon,
   ArrowPathIcon,
@@ -18,6 +20,7 @@ import {
 export default function SwapPage() {
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const { addTransaction } = useTransactionContext();
   const addresses = getContractAddresses();
 
   const [direction, setDirection] = useState<'eth_to_token' | 'token_to_eth'>('eth_to_token');
@@ -115,6 +118,22 @@ export default function SwapPage() {
           args: [BigInt(amount)],
         });
       }
+
+      // Record swap transaction (persisted to backend)
+      addTransaction({
+        id: uuidv4(),
+        type: 'swap',
+        propertyId: '',
+        propertyTitle: direction === 'eth_to_token' ? 'ETH → PAR7E' : 'PAR7E → ETH',
+        from: direction === 'eth_to_token' ? address! : address!,
+        to: direction === 'eth_to_token' ? address! : address!,
+        tokens: direction === 'eth_to_token' ? 0 : parseInt(amount),
+        pricePerToken: 0,
+        totalAmount: direction === 'eth_to_token' ? parseFloat(amount) : 0,
+        txHash: hash,
+        status: 'confirmed',
+        createdAt: new Date().toISOString(),
+      });
 
       setResult({
         success: true,

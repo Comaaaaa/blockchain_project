@@ -19,6 +19,7 @@ function getTypeVariant(type: string): 'success' | 'danger' | 'info' | 'warning'
     purchase: 'success',
     sale: 'danger',
     transfer: 'info',
+    swap: 'info',
     dividend: 'warning',
   };
   return map[type] || 'info';
