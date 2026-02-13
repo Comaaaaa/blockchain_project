@@ -1,4 +1,5 @@
 const hre = require("hardhat");
+const { properties } = require("../properties-config");
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
@@ -26,28 +27,7 @@ async function main() {
   const oracleAddr = await oracle.getAddress();
   console.log("PriceOracle deployed at:", oracleAddr);
 
-  // 3. Deploy PropertyToken (ERC-20 for a sample property)
-  console.log("\n--- Deploying PropertyToken (PAR7E) ---");
-  const PropertyToken = await hre.ethers.getContractFactory("PropertyToken");
-  const tokenPrice = hre.ethers.parseEther("0.001"); // 0.001 ETH per token
-  const propertyToken = await PropertyToken.deploy(
-    "Appartement Paris 7e",
-    "PAR7E",
-    "prop-001",
-    1000, // 1000 tokens
-    tokenPrice,
-    complianceAddr
-  );
-  await propertyToken.waitForDeployment();
-  const propertyTokenAddr = await propertyToken.getAddress();
-  console.log("PropertyToken (PAR7E) deployed at:", propertyTokenAddr);
-
-  // Set initial price in oracle
-  const txOracle = await oracle.updatePrice(propertyTokenAddr, tokenPrice, 9500);
-  await txOracle.wait();
-  console.log("Oracle price set for PAR7E");
-
-  // 4. Deploy PropertyNFT
+  // 3. Deploy PropertyNFT
   console.log("\n--- Deploying PropertyNFT ---");
   const PropertyNFT = await hre.ethers.getContractFactory("PropertyNFT");
   const propertyNFT = await PropertyNFT.deploy(
@@ -72,6 +52,48 @@ async function main() {
   await txMintNFT.wait();
   console.log("Demo NFT minted for prop-001");
 
+  // 4. Deploy PropertyToken contracts dynamically
+  const deployedPropertyTokens = [];
+  const PropertyTokenFactory = await hre.ethers.getContractFactory("PropertyToken");
+
+  for (const property of properties) {
+    if (property.token_symbol) {
+      console.log(`\n--- Deploying PropertyToken (${property.token_symbol}) ---`);
+      const tokenPrice = hre.ethers.parseUnits(property.token_price_wei, "wei"); // Use parseUnits for wei
+      const propertyToken = await PropertyTokenFactory.deploy(
+        property.token_name,
+        property.token_symbol,
+        property.id,
+        property.total_tokens,
+        tokenPrice,
+        complianceAddr
+      );
+      await propertyToken.waitForDeployment();
+      const propertyTokenAddr = await propertyToken.getAddress();
+      console.log(`PropertyToken (${property.token_symbol}) deployed at:`, propertyTokenAddr);
+
+      // Set initial price in oracle
+      // Assuming a fixed confidence for now, e.g., 9500 (95.00%)
+      await oracle.updatePrice(propertyTokenAddr, tokenPrice, 9500);
+      console.log(`Oracle price set for ${property.token_symbol}`);
+
+      deployedPropertyTokens.push({
+        id: property.id,
+        symbol: property.token_symbol,
+        address: propertyTokenAddr,
+        instance: propertyToken,
+      });
+    }
+  }
+
+  // Ensure at least one property token is deployed for the swap pool
+  if (deployedPropertyTokens.length === 0) {
+    throw new Error("No tokenizable properties found to deploy PropertyToken contracts.");
+  }
+
+  const firstPropertyTokenAddr = deployedPropertyTokens[0].address;
+  const firstPropertyTokenInstance = deployedPropertyTokens[0].instance;
+
   // 5. Deploy PropertyMarketplace
   console.log("\n--- Deploying PropertyMarketplace ---");
   const PropertyMarketplace = await hre.ethers.getContractFactory("PropertyMarketplace");
@@ -91,7 +113,7 @@ async function main() {
   // 7. Deploy TokenSwapPool (AMM liquidity pool)
   console.log("\n--- Deploying TokenSwapPool ---");
   const TokenSwapPool = await hre.ethers.getContractFactory("TokenSwapPool");
-  const swapPool = await TokenSwapPool.deploy(propertyTokenAddr, complianceAddr);
+  const swapPool = await TokenSwapPool.deploy(firstPropertyTokenAddr, complianceAddr);
   await swapPool.waitForDeployment();
   const swapPoolAddr = await swapPool.getAddress();
   console.log("TokenSwapPool deployed at:", swapPoolAddr);
@@ -113,12 +135,10 @@ async function main() {
   const liquidityTokens = 200; // 200 tokens
   const liquidityETH = hre.ethers.parseEther("0.2"); // 0.2 ETH
 
-  const txApprove = await propertyToken.approve(swapPoolAddr, liquidityTokens);
-  await txApprove.wait();
-  console.log("Tokens approved for swap pool");
-  const txLiq = await swapPool.addLiquidity(liquidityTokens, { value: liquidityETH });
-  await txLiq.wait();
-  console.log("Added liquidity: 200 PAR7E + 0.2 ETH");
+  // Approve swapPool to spend deployer's tokens
+  await firstPropertyTokenInstance.approve(swapPoolAddr, liquidityTokens);
+  await swapPool.addLiquidity(liquidityTokens, { value: liquidityETH });
+  console.log(`Added liquidity: ${liquidityTokens} ${deployedPropertyTokens[0].symbol} + 0.2 ETH`);
 
   // Summary
   console.log("\n========================================");
@@ -127,12 +147,16 @@ async function main() {
   const addresses = {
     ComplianceRegistry: complianceAddr,
     PriceOracle: oracleAddr,
-    PropertyToken_PAR7E: propertyTokenAddr,
     PropertyNFT: propertyNFTAddr,
     PropertyMarketplace: marketplaceAddr,
     NFTMarketplace: nftMarketplaceAddr,
     TokenSwapPool: swapPoolAddr,
   };
+
+  // Add dynamically deployed property token addresses to the summary
+  deployedPropertyTokens.forEach((token) => {
+    addresses[`PropertyToken_${token.symbol}`] = token.address;
+  });
 
   console.log(JSON.stringify(addresses, null, 2));
 
@@ -150,3 +174,4 @@ main()
     console.error(error);
     process.exit(1);
   });
+
