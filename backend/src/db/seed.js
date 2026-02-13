@@ -233,6 +233,58 @@ function seed() {
   insertMany(properties);
   console.log(`[Seed] Inserted ${properties.length} properties`);
 
+  // Seed NFTs linked to the first 3 properties
+  const nfts = [
+    {
+      token_id: 0,
+      owner_address: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+      asset_type: "property_deed",
+      location: "15 Rue de Grenelle, 75007 Paris",
+      valuation_wei: "520000000000000000",
+      token_uri: "ipfs://QmTokenImmo/prop-001",
+      property_id: "prop-001",
+    },
+    {
+      token_id: 1,
+      owner_address: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+      asset_type: "property_deed",
+      location: "22 Quai Perrache, 69002 Lyon",
+      valuation_wei: "380000000000000000",
+      token_uri: "ipfs://QmTokenImmo/prop-002",
+      property_id: "prop-002",
+    },
+    {
+      token_id: 2,
+      owner_address: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+      asset_type: "property_deed",
+      location: "8 Boulevard de la Mer, 06000 Nice",
+      valuation_wei: "890000000000000000",
+      token_uri: "ipfs://QmTokenImmo/prop-003",
+      property_id: "prop-003",
+    },
+  ];
+
+  const insertNft = db.prepare(`
+    INSERT INTO nfts (token_id, owner_address, asset_type, location, valuation_wei, token_uri, property_id)
+    VALUES (@token_id, @owner_address, @asset_type, @location, @valuation_wei, @token_uri, @property_id)
+    ON CONFLICT(token_id) DO UPDATE SET
+      owner_address = excluded.owner_address,
+      asset_type = excluded.asset_type,
+      location = excluded.location,
+      valuation_wei = excluded.valuation_wei,
+      token_uri = excluded.token_uri,
+      property_id = excluded.property_id
+  `);
+
+  const insertManyNfts = db.transaction((items) => {
+    for (const item of items) {
+      insertNft.run(item);
+    }
+  });
+
+  insertManyNfts(nfts);
+  console.log(`[Seed] Inserted ${nfts.length} NFTs linked to properties`);
+
   // Set token_address for prop-001 from deployed addresses if available
   try {
     const fs = require("fs");

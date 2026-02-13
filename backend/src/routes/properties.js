@@ -88,6 +88,18 @@ router.get("/:id", (req, res) => {
   property.images = property.images ? JSON.parse(property.images) : [];
   property.featured = !!property.featured;
 
+  // Include linked NFT if any
+  const nft = db.prepare("SELECT * FROM nfts WHERE property_id = ?").get(req.params.id);
+  property.nft = nft ? {
+    tokenId: nft.token_id,
+    ownerAddress: nft.owner_address,
+    assetType: nft.asset_type,
+    location: nft.location,
+    valuationWei: nft.valuation_wei,
+    tokenUri: nft.token_uri,
+    createdAt: nft.created_at,
+  } : null;
+
   res.json(property);
 });
 

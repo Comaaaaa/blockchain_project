@@ -5,11 +5,12 @@ import PageContainer from '@/components/layout/PageContainer';
 import NFTGrid from '@/components/nft/NFTGrid';
 import Button from '@/components/ui/Button';
 import { api } from '@/lib/api';
-import { NFT } from '@/types';
+import { NFT, NFTListing } from '@/types';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 
 export default function NFTsPage() {
   const [nfts, setNfts] = useState<NFT[]>([]);
+  const [listings, setListings] = useState<NFTListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,8 +18,12 @@ export default function NFTsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getNFTs();
-      const mapped: NFT[] = data.map((item: any) => ({
+      const [nftData, listingData] = await Promise.all([
+        api.getNFTs(),
+        api.getNFTListings().catch(() => []),
+      ]);
+
+      const mapped: NFT[] = nftData.map((item: any) => ({
         tokenId: item.token_id ?? item.tokenId,
         ownerAddress: item.owner_address ?? item.ownerAddress,
         assetType: item.asset_type ?? item.assetType,
@@ -26,8 +31,25 @@ export default function NFTsPage() {
         valuationWei: item.valuation_wei ?? item.valuationWei,
         tokenUri: item.token_uri ?? item.tokenUri,
         createdAt: item.created_at ?? item.createdAt,
+        propertyId: item.property_id ?? item.propertyId,
+        propertyTitle: item.property_title ?? item.propertyTitle,
+        propertyCity: item.property_city ?? item.propertyCity,
       }));
       setNfts(mapped);
+
+      const mappedListings: NFTListing[] = listingData.map((item: any) => ({
+        listingId: item.id,
+        listingIdOnchain: item.listing_id_onchain,
+        seller: item.seller_address,
+        tokenId: item.nft_token_id,
+        priceWei: item.price_wei,
+        active: !!item.active,
+        createdAt: item.created_at,
+        assetType: item.asset_type,
+        location: item.location,
+        propertyTitle: item.property_title,
+      }));
+      setListings(mappedListings);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement des NFTs');
     } finally {
@@ -65,7 +87,7 @@ export default function NFTsPage() {
           <p className="text-gray-500">Chargement des NFTs...</p>
         </div>
       ) : (
-        <NFTGrid nfts={nfts} />
+        <NFTGrid nfts={nfts} listings={listings} />
       )}
     </PageContainer>
   );

@@ -1,14 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { NFT } from '@/types';
+import { NFT, NFTListing } from '@/types';
 import { getAssetTypeLabel, formatValuationFromWei, shortenAddress } from '@/lib/utils';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
-import { MapPinIcon } from '@heroicons/react/24/outline';
+import { MapPinIcon, HomeIcon, TagIcon } from '@heroicons/react/24/outline';
+import { formatEther } from 'viem';
 
 interface NFTCardProps {
   nft: NFT;
+  listing?: NFTListing;
 }
 
 function getAssetTypeBadgeVariant(assetType: string): 'success' | 'info' | 'warning' | 'default' {
@@ -20,7 +22,7 @@ function getAssetTypeBadgeVariant(assetType: string): 'success' | 'info' | 'warn
   return map[assetType] || 'default';
 }
 
-export default function NFTCard({ nft }: NFTCardProps) {
+export default function NFTCard({ nft, listing }: NFTCardProps) {
   return (
     <Link href={`/nfts/${nft.tokenId}`}>
       <Card hover className="h-full flex flex-col p-5">
@@ -31,6 +33,22 @@ export default function NFTCard({ nft }: NFTCardProps) {
             {getAssetTypeLabel(nft.assetType)}
           </Badge>
         </div>
+
+        {/* Listing badge */}
+        {listing && (
+          <div className="flex items-center gap-1 mb-2 px-2 py-1 rounded-full bg-orange-50 border border-orange-300 text-orange-700 text-xs w-fit">
+            <TagIcon className="h-3.5 w-3.5" />
+            <span>En vente — {formatEther(BigInt(listing.priceWei))} ETH</span>
+          </div>
+        )}
+
+        {/* Property badge */}
+        {nft.propertyId && (
+          <div className="flex items-center gap-1 mb-2 px-2 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 text-xs w-fit">
+            <HomeIcon className="h-3.5 w-3.5" />
+            <span className="line-clamp-1">{nft.propertyTitle || nft.propertyId}</span>
+          </div>
+        )}
 
         {/* Location */}
         <div className="flex items-center text-sm text-gray-500 mb-3">

@@ -22,9 +22,12 @@ contract PropertyNFT is ERC721, ERC721URIStorage, Ownable {
         string location;
         uint256 valuationWei;
         uint256 mintedAt;
+        string propertyId;
     }
 
     mapping(uint256 => NFTMetadata) public nftMetadata;
+    mapping(string => uint256) public propertyToToken;
+    mapping(string => bool) public propertyHasToken;
 
     event NFTMinted(
         uint256 indexed tokenId,
@@ -50,9 +53,15 @@ contract PropertyNFT is ERC721, ERC721URIStorage, Ownable {
         string memory uri,
         string memory assetType,
         string memory location,
-        uint256 valuationWei
+        uint256 valuationWei,
+        string memory propertyId
     ) external onlyOwner returns (uint256) {
         require(complianceRegistry.isCompliant(to), "Recipient not KYC compliant");
+
+        // If propertyId is not empty, enforce uniqueness
+        if (bytes(propertyId).length > 0) {
+            require(!propertyHasToken[propertyId], "Property already has an NFT");
+        }
 
         uint256 tokenId = _nextTokenId++;
         _safeMint(to, tokenId);
@@ -62,8 +71,14 @@ contract PropertyNFT is ERC721, ERC721URIStorage, Ownable {
             assetType: assetType,
             location: location,
             valuationWei: valuationWei,
-            mintedAt: block.timestamp
+            mintedAt: block.timestamp,
+            propertyId: propertyId
         });
+
+        if (bytes(propertyId).length > 0) {
+            propertyToToken[propertyId] = tokenId;
+            propertyHasToken[propertyId] = true;
+        }
 
         emit NFTMinted(tokenId, to, assetType, valuationWei);
         return tokenId;

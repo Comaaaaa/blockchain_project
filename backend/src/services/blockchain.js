@@ -20,6 +20,7 @@ const ABIs = {
   PropertyToken: loadABI("PropertyToken"),
   PropertyNFT: loadABI("PropertyNFT"),
   PropertyMarketplace: loadABI("PropertyMarketplace"),
+  NFTMarketplace: loadABI("NFTMarketplace"),
   PriceOracle: loadABI("PriceOracle"),
   TokenSwapPool: loadABI("TokenSwapPool"),
 };
@@ -35,6 +36,7 @@ function loadAddresses() {
       PropertyToken_PAR7E: process.env.PROPERTY_TOKEN_ADDRESS,
       PropertyNFT: process.env.PROPERTY_NFT_ADDRESS,
       PropertyMarketplace: process.env.PROPERTY_MARKETPLACE_ADDRESS,
+      NFTMarketplace: process.env.NFT_MARKETPLACE_ADDRESS,
       TokenSwapPool: process.env.TOKEN_SWAP_POOL_ADDRESS,
     };
   }

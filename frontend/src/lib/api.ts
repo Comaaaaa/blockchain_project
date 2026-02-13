@@ -85,9 +85,11 @@ export const api = {
 
   // NFTs
   getNFTs: () => fetchApi<any[]>('/nfts'),
+  getNFTListings: () => fetchApi<any[]>('/nfts/listings'),
   getNFT: (tokenId: number) => fetchApi<any>(`/nfts/${tokenId}`),
   mintNFT: (data: any) =>
     fetchApi<any>('/nfts/mint', { method: 'POST', body: JSON.stringify(data) }),
+  getPropertyNFT: (id: string) => fetchApi<any>(`/properties/${id}`),
 
   // Contracts info
   getContractAddresses: () => fetchApi<any>('/contracts'),
