@@ -187,7 +187,7 @@ function seed() {
   const db = getDb();
 
   const insertProperty = db.prepare(`
-    INSERT OR REPLACE INTO properties (
+    INSERT INTO properties (
       id, title, description, address, city, zip_code, type,
       price, surface, rooms, bedrooms, year_built, status, images, featured,
       token_symbol, token_name, total_tokens, token_price_wei,
@@ -198,6 +198,30 @@ function seed() {
       @token_symbol, @token_name, @total_tokens, @token_price_wei,
       @annual_rent, @annual_charges, @net_yield, @gross_yield, @occupancy_rate
     )
+    ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      description = excluded.description,
+      address = excluded.address,
+      city = excluded.city,
+      zip_code = excluded.zip_code,
+      type = excluded.type,
+      price = excluded.price,
+      surface = excluded.surface,
+      rooms = excluded.rooms,
+      bedrooms = excluded.bedrooms,
+      year_built = excluded.year_built,
+      status = excluded.status,
+      images = excluded.images,
+      featured = excluded.featured,
+      token_symbol = excluded.token_symbol,
+      token_name = excluded.token_name,
+      total_tokens = excluded.total_tokens,
+      token_price_wei = excluded.token_price_wei,
+      annual_rent = excluded.annual_rent,
+      annual_charges = excluded.annual_charges,
+      net_yield = excluded.net_yield,
+      gross_yield = excluded.gross_yield,
+      occupancy_rate = excluded.occupancy_rate
   `);
 
   const insertMany = db.transaction((props) => {
