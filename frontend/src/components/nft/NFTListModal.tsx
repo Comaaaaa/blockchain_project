@@ -6,7 +6,7 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { NFT } from '@/types';
-import { useWriteContract } from 'wagmi';
+import { useReadContract, useWriteContract } from 'wagmi';
 import { parseEther } from 'viem';
 
 interface NFTListModalProps {
@@ -19,11 +19,26 @@ interface NFTListModalProps {
 export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTListModalProps) {
   const { writeContractAsync } = useWriteContract();
   const addresses = getContractAddresses();
+  const marketplaceAddr = addresses.NFTMarketplace as `0x${string}`;
+
+  const { data: feeBps } = useReadContract({
+    address: marketplaceAddr,
+    abi: NFTMarketplaceABI,
+    functionName: 'feeBps',
+    query: { enabled: Boolean(addresses.NFTMarketplace) },
+  });
 
   const [priceETH, setPriceETH] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'idle' | 'approving' | 'listing' | 'done'>('idle');
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const numericPrice = parseFloat(priceETH);
+  const effectiveFeeBps = Number(feeBps ?? 100n);
+  const feePercentLabel = (effectiveFeeBps / 100).toFixed(2).replace(/\.00$/, '');
+  const feeAmountEth = Number.isFinite(numericPrice) && numericPrice > 0
+    ? (numericPrice * (effectiveFeeBps / 10000)).toFixed(6)
+    : '0.000000';
 
   const handleList = async () => {
     if (!priceETH || parseFloat(priceETH) <= 0) return;
@@ -34,7 +49,6 @@ export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTLis
     try {
       const priceWei = parseEther(priceETH);
       const nftContractAddr = addresses.PropertyNFT as `0x${string}`;
-      const marketplaceAddr = addresses.NFTMarketplace as `0x${string}`;
 
       // Step 1: Approve marketplace to transfer the NFT
       setStep('approving');
@@ -115,15 +129,15 @@ export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTLis
           onChange={(e) => setPriceETH(e.target.value)}
         />
 
-        {priceETH && parseFloat(priceETH) > 0 && (
+        {priceETH && numericPrice > 0 && (
           <div className="bg-orange-50 rounded-lg p-3 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Prix total</span>
               <span className="font-bold text-orange">{priceETH} ETH</span>
             </div>
             <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>Frais marketplace (1%)</span>
-              <span>{(parseFloat(priceETH) * 0.01).toFixed(6)} ETH</span>
+              <span>Frais marketplace ({feePercentLabel}%)</span>
+              <span>{feeAmountEth} ETH</span>
             </div>
           </div>
         )}
@@ -131,7 +145,7 @@ export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTLis
         <Button
           onClick={handleList}
           loading={loading}
-          disabled={!priceETH || parseFloat(priceETH) <= 0}
+          disabled={!priceETH || numericPrice <= 0}
           className="w-full"
         >
           {stepLabel}
