@@ -4,8 +4,9 @@ import { use } from 'react';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePropertyContext } from '@/context/PropertyContext';
+import { api } from '@/lib/api';
 import PageContainer from '@/components/layout/PageContainer';
 import TokenPurchaseForm from '@/components/property/TokenPurchaseForm';
 import Badge from '@/components/ui/Badge';
@@ -15,6 +16,8 @@ import {
   formatPercent,
   getPropertyTypeLabel,
   getStatusLabel,
+  shortenAddress,
+  formatValuationFromWei,
 } from '@/lib/utils';
 import {
   MapPinIcon,
@@ -23,6 +26,7 @@ import {
   ChartBarIcon,
   HomeIcon,
   ArrowLeftIcon,
+  DocumentIcon,
 } from '@heroicons/react/24/outline';
 
 export default function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,6 +34,21 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
   const { state } = usePropertyContext();
   const property = state.properties.find((p) => p.id === id);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [linkedNft, setLinkedNft] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchLinkedNft = async () => {
+      try {
+        const data = await api.getPropertyNFT(id);
+        if (data.nft) {
+          setLinkedNft(data.nft);
+        }
+      } catch {
+        // No NFT linked or API error, ignore
+      }
+    };
+    fetchLinkedNft();
+  }, [id]);
 
   if (!property) {
     notFound();
@@ -198,6 +217,41 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* NFT — Titre de Propriete */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              <DocumentIcon className="h-5 w-5 inline mr-2" />
+              NFT — Titre de Propriete
+            </h2>
+            {linkedNft ? (
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Token</span>
+                  <span className="font-mono font-semibold text-orange">TIMMO #{linkedNft.tokenId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Proprietaire</span>
+                  <span className="font-mono text-sm">{shortenAddress(linkedNft.ownerAddress)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Valorisation</span>
+                  <span className="font-bold text-gray-900">{formatValuationFromWei(linkedNft.valuationWei)}</span>
+                </div>
+                <div className="pt-2">
+                  <Link
+                    href={`/nfts/${linkedNft.tokenId}`}
+                    className="inline-flex items-center text-sm text-orange hover:text-orange/80 font-medium transition-colors"
+                  >
+                    Voir le NFT
+                    <ArrowLeftIcon className="h-4 w-4 ml-1 rotate-180" />
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">Aucun NFT associe a ce bien</p>
+            )}
           </div>
         </div>
 

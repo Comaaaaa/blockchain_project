@@ -146,3 +146,31 @@ export interface Toast {
   message?: string;
   duration?: number;
 }
+
+export interface NFTListing {
+  listingId: number;
+  listingIdOnchain: number;
+  seller: string;
+  tokenId: number;
+  priceWei: string;
+  active: boolean;
+  createdAt: string;
+  assetType?: NFTAssetType;
+  location?: string;
+  propertyTitle?: string;
+}
+
+export type NFTAssetType = 'property_deed' | 'artwork' | 'collectible';
+
+export interface NFT {
+  tokenId: number;
+  ownerAddress: string;
+  assetType: NFTAssetType;
+  location: string;
+  valuationWei: string;
+  tokenUri: string;
+  createdAt: string;
+  propertyId?: string;
+  propertyTitle?: string;
+  propertyCity?: string;
+}

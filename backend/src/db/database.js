@@ -124,9 +124,32 @@ function initTables() {
       valuation_wei TEXT,
       token_uri TEXT,
       minted_at TEXT,
+      property_id TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS nft_listings (
+      id INTEGER PRIMARY KEY,
+      listing_id_onchain INTEGER UNIQUE,
+      seller_address TEXT NOT NULL,
+      nft_contract TEXT NOT NULL,
+      nft_token_id INTEGER NOT NULL,
+      price_wei TEXT NOT NULL,
+      active INTEGER DEFAULT 1,
+      buyer_address TEXT,
+      tx_hash TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Migration: add property_id column to existing nfts table
+  try {
+    db.exec(`ALTER TABLE nfts ADD COLUMN property_id TEXT`);
+  } catch (e) {
+    // Column already exists, ignore
+  }
 }
 
 module.exports = { getDb };

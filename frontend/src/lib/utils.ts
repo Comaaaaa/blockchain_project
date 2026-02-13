@@ -105,3 +105,18 @@ export function getTransactionStatusLabel(status: string): string {
   };
   return labels[status] || status;
 }
+
+export function getAssetTypeLabel(assetType: string): string {
+  const labels: Record<string, string> = {
+    property_deed: 'Titre de propriete',
+    artwork: 'Oeuvre d\'art',
+    collectible: 'Objet de collection',
+  };
+  return labels[assetType] || assetType;
+}
+
+export function formatValuationFromWei(valuationWei: string): string {
+  const wei = BigInt(valuationWei);
+  const eth = Number(wei) / 1e18;
+  return `${eth.toFixed(4)} ETH`;
+}

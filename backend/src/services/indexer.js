@@ -231,6 +231,78 @@ async function indexSwapEvents(db, swapPool, fromBlock, toBlock) {
   if (total > 0) console.log(`[Indexer] Swaps: ${total} events`);
 }
 
+async function indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, toBlock) {
+  // NFTListed events
+  const listedFilter = nftMarketplace.filters.NFTListed();
+  const listedEvents = await nftMarketplace.queryFilter(listedFilter, fromBlock, toBlock);
+
+  for (const event of listedEvents) {
+    const listingId = event.args[0].toString();
+    const seller = event.args[1];
+    const nftContract = event.args[2];
+    const tokenId = event.args[3].toString();
+    const price = event.args[4].toString();
+
+    db.prepare(
+      `INSERT OR IGNORE INTO nft_listings (listing_id_onchain, seller_address, nft_contract, nft_token_id, price_wei, active, tx_hash)
+       VALUES (?, ?, ?, ?, ?, 1, ?)`
+    ).run(
+      parseInt(listingId),
+      seller.toLowerCase(),
+      nftContract.toLowerCase(),
+      parseInt(tokenId),
+      price,
+      event.transactionHash
+    );
+  }
+
+  // NFTSold events
+  const soldFilter = nftMarketplace.filters.NFTSold();
+  const soldEvents = await nftMarketplace.queryFilter(soldFilter, fromBlock, toBlock);
+
+  for (const event of soldEvents) {
+    const listingId = event.args[0].toString();
+    const buyer = event.args[1];
+    const tokenId = event.args[2].toString();
+    const price = event.args[3].toString();
+
+    db.prepare(
+      `UPDATE nft_listings SET active = 0, buyer_address = ? WHERE listing_id_onchain = ?`
+    ).run(buyer.toLowerCase(), parseInt(listingId));
+
+    // Update NFT owner
+    db.prepare(
+      `UPDATE nfts SET owner_address = ? WHERE token_id = ?`
+    ).run(buyer.toLowerCase(), parseInt(tokenId));
+
+    db.prepare(
+      `INSERT OR IGNORE INTO transactions (id, type, from_address, to_address, total_amount_wei, tx_hash, block_number, status)
+       VALUES (?, 'listing_sold', ?, ?, ?, ?, ?, 'confirmed')`
+    ).run(
+      `tx-${event.transactionHash.slice(0, 16)}-nft`,
+      "nft_marketplace",
+      buyer.toLowerCase(),
+      price,
+      event.transactionHash,
+      event.blockNumber
+    );
+  }
+
+  // NFTListingCancelled events
+  const cancelledFilter = nftMarketplace.filters.NFTListingCancelled();
+  const cancelledEvents = await nftMarketplace.queryFilter(cancelledFilter, fromBlock, toBlock);
+
+  for (const event of cancelledEvents) {
+    const listingId = event.args[0].toString();
+    db.prepare(
+      `UPDATE nft_listings SET active = 0 WHERE listing_id_onchain = ?`
+    ).run(parseInt(listingId));
+  }
+
+  const total = listedEvents.length + soldEvents.length + cancelledEvents.length;
+  if (total > 0) console.log(`[Indexer] NFT Marketplace: ${total} events`);
+}
+
 async function indexOracleEvents(db, oracle, fromBlock, toBlock) {
   const priceFilter = oracle.filters.PriceUpdated();
   const priceEvents = await priceFilter ? await oracle.queryFilter(priceFilter, fromBlock, toBlock) : [];
@@ -253,7 +325,7 @@ async function indexOracleEvents(db, oracle, fromBlock, toBlock) {
  * Scan a block range in batches of MAX_BLOCK_RANGE to respect RPC provider limits.
  */
 async function scanInBatches(db, contracts, fromBlock, toBlock) {
-  const { compliance, propertyToken, marketplace, swapPool, oracle } = contracts;
+  const { compliance, propertyToken, marketplace, nftMarketplace, swapPool, oracle } = contracts;
 
   for (let batchStart = fromBlock; batchStart <= toBlock; batchStart += MAX_BLOCK_RANGE) {
     const batchEnd = Math.min(batchStart + MAX_BLOCK_RANGE - 1, toBlock);
@@ -261,6 +333,7 @@ async function scanInBatches(db, contracts, fromBlock, toBlock) {
     await indexComplianceEvents(db, compliance, batchStart, batchEnd);
     await indexTokenPurchases(db, propertyToken, batchStart, batchEnd);
     await indexMarketplaceEvents(db, marketplace, batchStart, batchEnd);
+    await indexNFTMarketplaceEvents(db, nftMarketplace, batchStart, batchEnd);
     await indexSwapEvents(db, swapPool, batchStart, batchEnd);
     await indexOracleEvents(db, oracle, batchStart, batchEnd);
 
@@ -288,10 +361,11 @@ async function runIndexer() {
     const compliance = await getContract("ComplianceRegistry");
     const propertyToken = await getContract("PropertyToken");
     const marketplace = await getContract("PropertyMarketplace");
+    const nftMarketplace = await getContract("NFTMarketplace");
     const swapPool = await getContract("TokenSwapPool");
     const oracle = await getContract("PriceOracle");
 
-    const contracts = { compliance, propertyToken, marketplace, swapPool, oracle };
+    const contracts = { compliance, propertyToken, marketplace, nftMarketplace, swapPool, oracle };
 
     if (blockRange >= MAX_BLOCK_RANGE) {
       // Scan in batches for RPC providers with block range limits
@@ -301,6 +375,7 @@ async function runIndexer() {
       await indexComplianceEvents(db, compliance, fromBlock, currentBlock);
       await indexTokenPurchases(db, propertyToken, fromBlock, currentBlock);
       await indexMarketplaceEvents(db, marketplace, fromBlock, currentBlock);
+      await indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, currentBlock);
       await indexSwapEvents(db, swapPool, fromBlock, currentBlock);
       await indexOracleEvents(db, oracle, fromBlock, currentBlock);
       setLastBlock(db, currentBlock);

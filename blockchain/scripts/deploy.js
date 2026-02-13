@@ -39,6 +39,19 @@ async function main() {
   const propertyNFTAddr = await propertyNFT.getAddress();
   console.log("PropertyNFT deployed at:", propertyNFTAddr);
 
+  // Mint a demo NFT linked to prop-001
+  const valuation = hre.ethers.parseEther("0.52"); // 0.52 ETH
+  const txMintNFT = await propertyNFT.mintAsset(
+    deployer.address,
+    "ipfs://QmTokenImmo/prop-001",
+    "property_deed",
+    "15 Rue de Grenelle, 75007 Paris",
+    valuation,
+    "prop-001"
+  );
+  await txMintNFT.wait();
+  console.log("Demo NFT minted for prop-001");
+
   // 4. Deploy PropertyToken contracts dynamically
   const deployedPropertyTokens = [];
   const PropertyTokenFactory = await hre.ethers.getContractFactory("PropertyToken");
@@ -89,7 +102,15 @@ async function main() {
   const marketplaceAddr = await marketplace.getAddress();
   console.log("PropertyMarketplace deployed at:", marketplaceAddr);
 
-  // 6. Deploy TokenSwapPool (AMM liquidity pool)
+  // 6. Deploy NFTMarketplace
+  console.log("\n--- Deploying NFTMarketplace ---");
+  const NFTMarketplace = await hre.ethers.getContractFactory("NFTMarketplace");
+  const nftMarketplace = await NFTMarketplace.deploy(complianceAddr);
+  await nftMarketplace.waitForDeployment();
+  const nftMarketplaceAddr = await nftMarketplace.getAddress();
+  console.log("NFTMarketplace deployed at:", nftMarketplaceAddr);
+
+  // 7. Deploy TokenSwapPool (AMM liquidity pool)
   console.log("\n--- Deploying TokenSwapPool ---");
   const TokenSwapPool = await hre.ethers.getContractFactory("TokenSwapPool");
   const swapPool = await TokenSwapPool.deploy(firstPropertyTokenAddr, complianceAddr);
@@ -97,7 +118,7 @@ async function main() {
   const swapPoolAddr = await swapPool.getAddress();
   console.log("TokenSwapPool deployed at:", swapPoolAddr);
 
-  // 7. Whitelist contracts so they can hold tokens
+  // 8. Whitelist contracts so they can hold tokens
   console.log("\n--- Whitelisting contracts ---");
   const txWL1 = await compliance.addToWhitelist(swapPoolAddr);
   await txWL1.wait();
@@ -105,8 +126,11 @@ async function main() {
   const txWL2 = await compliance.addToWhitelist(marketplaceAddr);
   await txWL2.wait();
   console.log("Marketplace whitelisted");
+  const txWL3 = await compliance.addToWhitelist(nftMarketplaceAddr);
+  await txWL3.wait();
+  console.log("NFTMarketplace whitelisted");
 
-  // 8. Provide initial liquidity to the pool (using the first deployed property token)
+  // 9. Provide initial liquidity to the pool
   console.log("\n--- Adding initial liquidity ---");
   const liquidityTokens = 200; // 200 tokens
   const liquidityETH = hre.ethers.parseEther("0.2"); // 0.2 ETH
@@ -125,6 +149,7 @@ async function main() {
     PriceOracle: oracleAddr,
     PropertyNFT: propertyNFTAddr,
     PropertyMarketplace: marketplaceAddr,
+    NFTMarketplace: nftMarketplaceAddr,
     TokenSwapPool: swapPoolAddr,
   };
 

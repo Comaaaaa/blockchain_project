@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 
 const navigation = [
   { name: 'Biens', href: '/properties' },
+  { name: 'NFTs', href: '/nfts' },
   { name: 'Marketplace', href: '/marketplace' },
   { name: 'Swap', href: '/swap' },
   { name: 'Portfolio', href: '/portfolio' },
