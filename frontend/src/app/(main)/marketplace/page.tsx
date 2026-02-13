@@ -18,7 +18,7 @@ import { parseEther } from 'viem';
 export default function MarketplacePage() {
   const { activeListings, dispatch: marketplaceDispatch, refetch } = useMarketplaceContext();
   const { dispatch: portfolioDispatch } = usePortfolioContext();
-  const { dispatch: txDispatch } = useTransactionContext();
+  const { addTransaction } = useTransactionContext();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [buying, setBuying] = useState<string | null>(null);
   const { address, isConnected } = useAccount();
@@ -54,22 +54,19 @@ export default function MarketplacePage() {
         },
       });
 
-      txDispatch({
-        type: 'ADD_TRANSACTION',
-        payload: {
-          id: uuidv4(),
-          type: 'purchase',
-          propertyId: listing.propertyId,
-          propertyTitle: listing.property.title,
-          from: listing.sellerAddress,
-          to: address,
-          tokens: listing.tokensForSale,
-          pricePerToken: listing.pricePerToken,
-          totalAmount: listing.totalPrice,
-          txHash: hash,
-          status: 'confirmed',
-          createdAt: new Date().toISOString(),
-        },
+      addTransaction({
+        id: uuidv4(),
+        type: 'purchase',
+        propertyId: listing.propertyId,
+        propertyTitle: listing.property.title,
+        from: listing.sellerAddress,
+        to: address,
+        tokens: listing.tokensForSale,
+        pricePerToken: listing.pricePerToken,
+        totalAmount: listing.totalPrice,
+        txHash: hash,
+        status: 'confirmed',
+        createdAt: new Date().toISOString(),
       });
 
       // Refetch from backend after some time (indexer will pick it up)

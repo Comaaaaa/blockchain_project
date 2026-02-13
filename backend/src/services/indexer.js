@@ -5,7 +5,10 @@ const { getDb } = require("../db/database");
  * Indexer service — polls blockchain events and syncs to the SQLite database.
  * Runs every interval (default: 60 seconds).
  * Tracks the last processed block to avoid re-indexing.
+ * Handles RPC providers with limited block range (e.g. Alchemy free tier: 10 blocks max).
  */
+
+const MAX_BLOCK_RANGE = 10; // Alchemy free tier limit
 
 function getLastBlock(db) {
   const row = db.prepare("SELECT value FROM indexer_state WHERE key = 'last_block'").get();
@@ -80,7 +83,7 @@ async function indexTokenPurchases(db, propertyToken, fromBlock, toBlock) {
     const tokenAddress = await propertyToken.getAddress();
     const propertyId = await propertyToken.propertyId();
 
-    db.prepare(
+    const result = db.prepare(
       `INSERT OR IGNORE INTO transactions (id, type, property_id, token_address, from_address, to_address, tokens, total_amount_wei, tx_hash, block_number, status)
        VALUES (?, 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
     ).run(
@@ -94,6 +97,20 @@ async function indexTokenPurchases(db, propertyToken, fromBlock, toBlock) {
       txHash,
       blockNumber
     );
+
+    // Update tokens_sold and status if the transaction was actually inserted
+    if (result.changes > 0) {
+      db.prepare(
+        `UPDATE properties
+         SET tokens_sold = tokens_sold + ?,
+             status = CASE
+               WHEN tokens_sold + ? >= total_tokens THEN 'funded'
+               ELSE 'funding'
+             END,
+             updated_at = datetime('now')
+         WHERE id = ?`
+      ).run(parseInt(amount), parseInt(amount), propertyId);
+    }
   }
 
   if (events.length > 0) console.log(`[Indexer] Token purchases: ${events.length} events`);
@@ -232,6 +249,26 @@ async function indexOracleEvents(db, oracle, fromBlock, toBlock) {
   if (priceEvents.length > 0) console.log(`[Indexer] Oracle prices: ${priceEvents.length} events`);
 }
 
+/**
+ * Scan a block range in batches of MAX_BLOCK_RANGE to respect RPC provider limits.
+ */
+async function scanInBatches(db, contracts, fromBlock, toBlock) {
+  const { compliance, propertyToken, marketplace, swapPool, oracle } = contracts;
+
+  for (let batchStart = fromBlock; batchStart <= toBlock; batchStart += MAX_BLOCK_RANGE) {
+    const batchEnd = Math.min(batchStart + MAX_BLOCK_RANGE - 1, toBlock);
+
+    await indexComplianceEvents(db, compliance, batchStart, batchEnd);
+    await indexTokenPurchases(db, propertyToken, batchStart, batchEnd);
+    await indexMarketplaceEvents(db, marketplace, batchStart, batchEnd);
+    await indexSwapEvents(db, swapPool, batchStart, batchEnd);
+    await indexOracleEvents(db, oracle, batchStart, batchEnd);
+
+    // Save progress after each batch so we don't re-scan on crash
+    setLastBlock(db, batchEnd);
+  }
+}
+
 async function runIndexer() {
   const db = getDb();
   const provider = getProvider();
@@ -245,7 +282,8 @@ async function runIndexer() {
       return; // Nothing new
     }
 
-    console.log(`[Indexer] Scanning blocks ${fromBlock} -> ${currentBlock}`);
+    const blockRange = currentBlock - fromBlock;
+    console.log(`[Indexer] Scanning blocks ${fromBlock} -> ${currentBlock} (${blockRange + 1} blocks)`);
 
     const compliance = await getContract("ComplianceRegistry");
     const propertyToken = await getContract("PropertyToken");
@@ -253,13 +291,21 @@ async function runIndexer() {
     const swapPool = await getContract("TokenSwapPool");
     const oracle = await getContract("PriceOracle");
 
-    await indexComplianceEvents(db, compliance, fromBlock, currentBlock);
-    await indexTokenPurchases(db, propertyToken, fromBlock, currentBlock);
-    await indexMarketplaceEvents(db, marketplace, fromBlock, currentBlock);
-    await indexSwapEvents(db, swapPool, fromBlock, currentBlock);
-    await indexOracleEvents(db, oracle, fromBlock, currentBlock);
+    const contracts = { compliance, propertyToken, marketplace, swapPool, oracle };
 
-    setLastBlock(db, currentBlock);
+    if (blockRange >= MAX_BLOCK_RANGE) {
+      // Scan in batches for RPC providers with block range limits
+      await scanInBatches(db, contracts, fromBlock, currentBlock);
+    } else {
+      // Small range, scan in one go
+      await indexComplianceEvents(db, compliance, fromBlock, currentBlock);
+      await indexTokenPurchases(db, propertyToken, fromBlock, currentBlock);
+      await indexMarketplaceEvents(db, marketplace, fromBlock, currentBlock);
+      await indexSwapEvents(db, swapPool, fromBlock, currentBlock);
+      await indexOracleEvents(db, oracle, fromBlock, currentBlock);
+      setLastBlock(db, currentBlock);
+    }
+
     console.log(`[Indexer] Synced to block ${currentBlock}`);
   } catch (error) {
     console.error("[Indexer] Error:", error.message);

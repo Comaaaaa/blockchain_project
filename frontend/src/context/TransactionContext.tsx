@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import { Transaction } from '@/types';
 import { api } from '@/lib/api';
 
@@ -59,9 +59,30 @@ function mapApiTransaction(t: any): Transaction {
   };
 }
 
+/**
+ * Persist a transaction to the backend so it survives page refreshes.
+ */
+async function saveTransactionToBackend(tx: Transaction) {
+  try {
+    await api.postTransaction({
+      type: tx.type === 'dividend' ? 'purchase' : tx.type,
+      property_id: tx.propertyId || undefined,
+      from_address: tx.from,
+      to_address: tx.to,
+      tokens: tx.tokens,
+      total_amount_wei: String(tx.totalAmount),
+      tx_hash: tx.txHash,
+      status: tx.status,
+    });
+  } catch (error) {
+    console.error('Failed to save transaction to backend:', error);
+  }
+}
+
 interface TransactionContextType {
   state: TransactionState;
   dispatch: React.Dispatch<TransactionAction>;
+  addTransaction: (tx: Transaction) => void;
   refetch: () => void;
 }
 
@@ -80,6 +101,12 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addTransaction = useCallback((tx: Transaction) => {
+    dispatch({ type: 'ADD_TRANSACTION', payload: tx });
+    // Persist to backend so it survives page refreshes
+    saveTransactionToBackend(tx);
+  }, []);
+
   useEffect(() => {
     fetchTransactions();
     const interval = setInterval(fetchTransactions, 60000);
@@ -87,7 +114,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <TransactionContext.Provider value={{ state, dispatch, refetch: fetchTransactions }}>
+    <TransactionContext.Provider value={{ state, dispatch, addTransaction, refetch: fetchTransactions }}>
       {children}
     </TransactionContext.Provider>
   );

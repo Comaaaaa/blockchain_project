@@ -15,7 +15,8 @@ async function main() {
   console.log("ComplianceRegistry deployed at:", complianceAddr);
 
   // Whitelist the deployer
-  await compliance.addToWhitelist(deployer.address);
+  const txWL0 = await compliance.addToWhitelist(deployer.address);
+  await txWL0.wait();
   console.log("Deployer whitelisted:", deployer.address);
 
   // 2. Deploy PriceOracle
@@ -98,9 +99,11 @@ async function main() {
 
   // 7. Whitelist contracts so they can hold tokens
   console.log("\n--- Whitelisting contracts ---");
-  await compliance.addToWhitelist(swapPoolAddr);
+  const txWL1 = await compliance.addToWhitelist(swapPoolAddr);
+  await txWL1.wait();
   console.log("SwapPool whitelisted");
-  await compliance.addToWhitelist(marketplaceAddr);
+  const txWL2 = await compliance.addToWhitelist(marketplaceAddr);
+  await txWL2.wait();
   console.log("Marketplace whitelisted");
 
   // 8. Provide initial liquidity to the pool (using the first deployed property token)
