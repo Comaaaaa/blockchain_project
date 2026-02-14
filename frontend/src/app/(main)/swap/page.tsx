@@ -6,7 +6,12 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Card from '@/components/ui/Card';
 import { api } from '@/lib/api';
-import { TokenSwapPoolABI, PropertyTokenABI, getContractAddresses } from '@/lib/contracts';
+import {
+  TokenSwapPoolABI,
+  PropertyTokenABI,
+  UniswapV2RouterABI,
+  getContractAddresses,
+} from '@/lib/contracts';
 import { useTransactionContext } from '@/context/TransactionContext';
 import { useAccount, useWriteContract } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
@@ -23,10 +28,12 @@ export default function SwapPage() {
   const { addTransaction } = useTransactionContext();
   const addresses = getContractAddresses();
 
+  const [dex, setDex] = useState<'pool' | 'uniswap' | 'sushiswap'>('pool');
   const [direction, setDirection] = useState<'eth_to_token' | 'token_to_eth'>('eth_to_token');
   const [amount, setAmount] = useState('');
   const [quote, setQuote] = useState<string | null>(null);
   const [poolInfo, setPoolInfo] = useState<any>(null);
+  const [dexPairInfo, setDexPairInfo] = useState<any>(null);
   const [oraclePrice, setOraclePrice] = useState<any>(null);
   const [priceHistory, setPriceHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,10 +41,15 @@ export default function SwapPage() {
 
   const fetchPoolInfo = async () => {
     try {
-      const info = await api.getPoolInfo();
-      setPoolInfo(info);
+      if (dex === 'pool') {
+        const info = await api.getPoolInfo();
+        setPoolInfo(info);
+      } else {
+        const info = await api.getDexPairInfo(dex === 'uniswap' ? 'uniswap' : 'sushiswap');
+        setDexPairInfo(info);
+      }
     } catch {
-      // Pool may not be deployed
+      // DEX may not be configured/deployed
     }
   };
 
@@ -62,12 +74,15 @@ export default function SwapPage() {
       fetchOraclePrice();
     }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [dex]);
 
   const getQuote = async () => {
     if (!amount || parseFloat(amount) <= 0) return;
     try {
-      const q = await api.getSwapQuote(direction, amount);
+      const q =
+        dex === 'pool'
+          ? await api.getSwapQuote(direction, amount)
+          : await api.getDexQuote(dex === 'uniswap' ? 'uniswap' : 'sushiswap', direction, amount);
       if (direction === 'eth_to_token') {
         setQuote(`${q.tokenOut} PAR7E`);
       } else {
@@ -85,7 +100,7 @@ export default function SwapPage() {
     } else {
       setQuote(null);
     }
-  }, [amount, direction]);
+  }, [amount, direction, dex]);
 
   const handleSwap = async () => {
     if (!isConnected || !amount) return;
@@ -96,27 +111,79 @@ export default function SwapPage() {
       let hash: string;
 
       if (direction === 'eth_to_token') {
-        hash = await writeContractAsync({
-          address: addresses.TokenSwapPool as `0x${string}`,
-          abi: TokenSwapPoolABI,
-          functionName: 'swapETHForToken',
-          value: parseEther(amount),
-        });
+        if (dex === 'pool') {
+          hash = await writeContractAsync({
+            address: addresses.TokenSwapPool as `0x${string}`,
+            abi: TokenSwapPoolABI,
+            functionName: 'swapETHForToken',
+            value: parseEther(amount),
+          });
+        } else {
+          const q = await api.getDexQuote(
+            dex === 'uniswap' ? 'uniswap' : 'sushiswap',
+            'eth_to_token',
+            amount
+          );
+          const outMin = (BigInt(q.tokenOut) * 98n) / 100n;
+          const routerAddress =
+            dex === 'uniswap' ? addresses.UniswapV2Router : addresses.SushiswapV2Router;
+          const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10);
+
+          hash = await writeContractAsync({
+            address: routerAddress as `0x${string}`,
+            abi: UniswapV2RouterABI,
+            functionName: 'swapExactETHForTokens',
+            args: [outMin, [addresses.WETH, addresses.PropertyToken_PAR7E], address as `0x${string}`, deadline],
+            value: parseEther(amount),
+          });
+        }
       } else {
+        const spender =
+          dex === 'pool'
+            ? addresses.TokenSwapPool
+            : dex === 'uniswap'
+              ? addresses.UniswapV2Router
+              : addresses.SushiswapV2Router;
+
         // Approve first
         await writeContractAsync({
           address: addresses.PropertyToken_PAR7E as `0x${string}`,
           abi: PropertyTokenABI,
           functionName: 'approve',
-          args: [addresses.TokenSwapPool as `0x${string}`, BigInt(amount)],
+          args: [spender as `0x${string}`, BigInt(amount)],
         });
 
-        hash = await writeContractAsync({
-          address: addresses.TokenSwapPool as `0x${string}`,
-          abi: TokenSwapPoolABI,
-          functionName: 'swapTokenForETH',
-          args: [BigInt(amount)],
-        });
+        if (dex === 'pool') {
+          hash = await writeContractAsync({
+            address: addresses.TokenSwapPool as `0x${string}`,
+            abi: TokenSwapPoolABI,
+            functionName: 'swapTokenForETH',
+            args: [BigInt(amount)],
+          });
+        } else {
+          const q = await api.getDexQuote(
+            dex === 'uniswap' ? 'uniswap' : 'sushiswap',
+            'token_to_eth',
+            amount
+          );
+          const outMin = (BigInt(q.ethOut) * 98n) / 100n;
+          const routerAddress =
+            dex === 'uniswap' ? addresses.UniswapV2Router : addresses.SushiswapV2Router;
+          const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10);
+
+          hash = await writeContractAsync({
+            address: routerAddress as `0x${string}`,
+            abi: UniswapV2RouterABI,
+            functionName: 'swapExactTokensForETH',
+            args: [
+              BigInt(amount),
+              outMin,
+              [addresses.PropertyToken_PAR7E, addresses.WETH],
+              address as `0x${string}`,
+              deadline,
+            ],
+          });
+        }
       }
 
       // Record swap transaction (persisted to backend)
@@ -124,7 +191,9 @@ export default function SwapPage() {
         id: uuidv4(),
         type: 'swap',
         propertyId: '',
-        propertyTitle: direction === 'eth_to_token' ? 'ETH → PAR7E' : 'PAR7E → ETH',
+        propertyTitle:
+          (direction === 'eth_to_token' ? 'ETH → PAR7E' : 'PAR7E → ETH') +
+          (dex === 'pool' ? ' (Pool)' : dex === 'uniswap' ? ' (Uniswap)' : ' (Sushiswap)'),
         from: direction === 'eth_to_token' ? address! : address!,
         to: direction === 'eth_to_token' ? address! : address!,
         tokens: direction === 'eth_to_token' ? 0 : parseInt(amount),
@@ -167,6 +236,41 @@ export default function SwapPage() {
               <ArrowsRightLeftIcon className="h-5 w-5 text-orange" />
               Swap
             </h3>
+
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={() => setDex('pool')}
+                className={`py-2 px-3 rounded-lg text-xs font-medium transition ${
+                  dex === 'pool' ? 'bg-orange text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Pool interne
+              </button>
+              <button
+                onClick={() => setDex('uniswap')}
+                className={`py-2 px-3 rounded-lg text-xs font-medium transition ${
+                  dex === 'uniswap' ? 'bg-orange text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Uniswap V2
+              </button>
+              <button
+                onClick={() => setDex('sushiswap')}
+                className={`py-2 px-3 rounded-lg text-xs font-medium transition ${
+                  dex === 'sushiswap' ? 'bg-orange text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Sushiswap V2
+              </button>
+            </div>
+
+            {dex !== 'pool' && (!dexPairInfo || !dexPairInfo.configured || !dexPairInfo.pairExists) && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-700">
+                {dexPairInfo?.configured
+                  ? 'Pair non creee pour ce DEX. Ajoutez la liquidite d abord.'
+                  : 'DEX non configure. Verifiez les variables d environnement.'}
+              </div>
+            )}
 
             {!isConnected && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-700">
@@ -219,7 +323,12 @@ export default function SwapPage() {
               <Button
                 onClick={handleSwap}
                 loading={loading}
-                disabled={!isConnected || !amount || parseFloat(amount) <= 0}
+                disabled={
+                  !isConnected ||
+                  !amount ||
+                  parseFloat(amount) <= 0 ||
+                  (dex !== 'pool' && (!dexPairInfo || !dexPairInfo.configured || !dexPairInfo.pairExists))
+                }
                 className="w-full"
                 size="lg"
               >
@@ -265,7 +374,15 @@ export default function SwapPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-gray-400 text-sm">Pool non disponible</p>
+              <p className="text-gray-400 text-sm">
+                {dex === 'pool' ? 'Pool non disponible' : 'Infos pair DEX non disponibles'}
+              </p>
+            )}
+
+            {dex !== 'pool' && dexPairInfo?.pairExists && (
+              <div className="mt-3 pt-3 border-t text-xs text-gray-500">
+                Pair {dexPairInfo.dex}: {dexPairInfo.pairAddress}
+              </div>
             )}
             <button
               onClick={fetchPoolInfo}

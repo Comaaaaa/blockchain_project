@@ -1,4 +1,5 @@
 const { getProvider, getContract, getAddresses } = require("./blockchain");
+const { ethers } = require("ethers");
 const { getDb } = require("../db/database");
 
 /**
@@ -9,6 +10,14 @@ const { getDb } = require("../db/database");
  */
 
 const MAX_BLOCK_RANGE = 10; // Alchemy free tier limit
+const V2_FACTORY_ABI = [
+  "function getPair(address tokenA, address tokenB) external view returns (address pair)",
+];
+const V2_PAIR_ABI = [
+  "event Swap(address indexed sender, uint amount0In, uint amount1In, uint amount0Out, uint amount1Out, address indexed to)",
+  "function token0() external view returns (address)",
+  "function token1() external view returns (address)",
+];
 
 function getLastBlock(db) {
   const row = db.prepare("SELECT value FROM indexer_state WHERE key = 'last_block'").get();
@@ -321,6 +330,83 @@ async function indexOracleEvents(db, oracle, fromBlock, toBlock) {
   if (priceEvents.length > 0) console.log(`[Indexer] Oracle prices: ${priceEvents.length} events`);
 }
 
+async function getDexPairAddress(factoryAddress, tokenAddress, wethAddress) {
+  if (!factoryAddress || !tokenAddress || !wethAddress) return null;
+  const provider = getProvider();
+  const factory = new ethers.Contract(factoryAddress, V2_FACTORY_ABI, provider);
+  const pairAddress = await factory.getPair(tokenAddress, wethAddress);
+  if (!pairAddress || pairAddress === ethers.ZeroAddress) return null;
+  return pairAddress;
+}
+
+async function indexExternalDexSwapEvents(db, fromBlock, toBlock) {
+  const addresses = getAddresses();
+  const tokenAddress = addresses.PropertyToken_PAR7E;
+  const wethAddress = process.env.WETH_ADDRESS;
+  if (!tokenAddress || !wethAddress) return;
+
+  const dexConfigs = [
+    { dex: "uniswap", factory: process.env.UNISWAP_V2_FACTORY_ADDRESS },
+    { dex: "sushiswap", factory: process.env.SUSHISWAP_V2_FACTORY_ADDRESS },
+  ];
+
+  const provider = getProvider();
+
+  for (const dexCfg of dexConfigs) {
+    if (!dexCfg.factory) continue;
+
+    let pairAddress;
+    try {
+      pairAddress = await getDexPairAddress(dexCfg.factory, tokenAddress, wethAddress);
+    } catch {
+      continue;
+    }
+    if (!pairAddress) continue;
+
+    const pair = new ethers.Contract(pairAddress, V2_PAIR_ABI, provider);
+    const [token0, token1] = await Promise.all([pair.token0(), pair.token1()]);
+    const swapFilter = pair.filters.Swap();
+    const swapEvents = await pair.queryFilter(swapFilter, fromBlock, toBlock);
+
+    for (const event of swapEvents) {
+      const sender = event.args[0];
+      const amount0In = event.args[1];
+      const amount1In = event.args[2];
+      const amount0Out = event.args[3];
+      const amount1Out = event.args[4];
+      const to = event.args[5];
+
+      const tokenIs0 = token0.toLowerCase() === tokenAddress.toLowerCase();
+      const wethIs0 = token0.toLowerCase() === wethAddress.toLowerCase();
+
+      const tokenIn = tokenIs0 ? amount0In : amount1In;
+      const tokenOut = tokenIs0 ? amount0Out : amount1Out;
+      const ethIn = wethIs0 ? amount0In : amount1In;
+      const ethOut = wethIs0 ? amount0Out : amount1Out;
+
+      const tokens = tokenIn > 0n ? tokenIn.toString() : tokenOut.toString();
+      const totalWei = ethIn > 0n ? ethIn.toString() : ethOut.toString();
+
+      db.prepare(
+        `INSERT OR IGNORE INTO transactions (id, type, from_address, to_address, tokens, total_amount_wei, tx_hash, block_number, status)
+         VALUES (?, 'swap', ?, ?, ?, ?, ?, ?, 'confirmed')`
+      ).run(
+        `tx-${event.transactionHash.slice(0, 16)}-${dexCfg.dex}`,
+        sender.toLowerCase(),
+        to.toLowerCase(),
+        tokens,
+        totalWei,
+        event.transactionHash,
+        event.blockNumber
+      );
+    }
+
+    if (swapEvents.length > 0) {
+      console.log(`[Indexer] ${dexCfg.dex} swaps: ${swapEvents.length} events`);
+    }
+  }
+}
+
 /**
  * Scan a block range in batches of MAX_BLOCK_RANGE to respect RPC provider limits.
  */
@@ -336,6 +422,7 @@ async function scanInBatches(db, contracts, fromBlock, toBlock) {
     await indexNFTMarketplaceEvents(db, nftMarketplace, batchStart, batchEnd);
     await indexSwapEvents(db, swapPool, batchStart, batchEnd);
     await indexOracleEvents(db, oracle, batchStart, batchEnd);
+    await indexExternalDexSwapEvents(db, batchStart, batchEnd);
 
     // Save progress after each batch so we don't re-scan on crash
     setLastBlock(db, batchEnd);
@@ -378,6 +465,7 @@ async function runIndexer() {
       await indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, currentBlock);
       await indexSwapEvents(db, swapPool, fromBlock, currentBlock);
       await indexOracleEvents(db, oracle, fromBlock, currentBlock);
+      await indexExternalDexSwapEvents(db, fromBlock, currentBlock);
       setLastBlock(db, currentBlock);
     }
 

@@ -7,6 +7,7 @@
     "test": "npx hardhat test",
     "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
     "deploy:sepolia": "npx hardhat run scripts/deploy.js --network sepolia",
+    "setup:uniswap:sepolia": "npx hardhat run scripts/setup-uniswap-v2.js --network sepolia",
     "node": "npx hardhat node"
   },
   "dependencies": {

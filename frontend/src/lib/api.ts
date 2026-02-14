@@ -54,6 +54,10 @@ export const api = {
   getPoolInfo: () => fetchApi<any>('/marketplace/pool'),
   getSwapQuote: (direction: string, amount: string) =>
     fetchApi<any>(`/marketplace/pool/quote?direction=${direction}&amount=${amount}`),
+  getDexQuote: (dex: 'uniswap' | 'sushiswap', direction: string, amount: string) =>
+    fetchApi<any>(`/marketplace/dex/quote?dex=${dex}&direction=${direction}&amount=${amount}`),
+  getDexPairInfo: (dex: 'uniswap' | 'sushiswap') =>
+    fetchApi<any>(`/marketplace/dex/pair?dex=${dex}`),
 
   // Transactions
   getTransactions: (params?: Record<string, string>) => {

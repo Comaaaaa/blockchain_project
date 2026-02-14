@@ -1,6 +1,7 @@
 const express = require("express");
 const { getDb } = require("../db/database");
-const { getContract, getAddresses } = require("../services/blockchain");
+const { ethers } = require("ethers");
+const { getContract, getAddresses, getProvider } = require("../services/blockchain");
 
 const router = express.Router();
 
@@ -111,6 +112,133 @@ router.get("/pool/quote", async (req, res) => {
     } else {
       res.status(400).json({ error: "direction must be eth_to_token or token_to_eth" });
     }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+function getDexConfig(dex) {
+  const key = (dex || "uniswap").toLowerCase();
+  if (key === "sushiswap") {
+    return {
+      dex: "sushiswap",
+      router: process.env.SUSHISWAP_V2_ROUTER_ADDRESS,
+      factory: process.env.SUSHISWAP_V2_FACTORY_ADDRESS,
+      weth: process.env.WETH_ADDRESS,
+    };
+  }
+  return {
+    dex: "uniswap",
+    router: process.env.UNISWAP_V2_ROUTER_ADDRESS,
+    factory: process.env.UNISWAP_V2_FACTORY_ADDRESS,
+    weth: process.env.WETH_ADDRESS,
+  };
+}
+
+const V2_ROUTER_ABI = [
+  "function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)",
+];
+
+const V2_FACTORY_ABI = [
+  "function getPair(address tokenA, address tokenB) external view returns (address pair)",
+];
+
+const V2_PAIR_ABI = [
+  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+  "function token0() external view returns (address)",
+  "function token1() external view returns (address)",
+];
+
+// GET /api/marketplace/dex/pair?dex=uniswap|sushiswap — configured DEX pair info
+router.get("/dex/pair", async (req, res) => {
+  try {
+    const cfg = getDexConfig(req.query.dex);
+    const addresses = getAddresses();
+    const tokenAddress = addresses.PropertyToken_PAR7E;
+
+    if (!cfg.router || !cfg.factory || !cfg.weth || !tokenAddress) {
+      return res.json({
+        dex: cfg.dex,
+        configured: false,
+        reason: "Missing DEX env vars or token address",
+      });
+    }
+
+    const provider = getProvider();
+    const factory = new ethers.Contract(cfg.factory, V2_FACTORY_ABI, provider);
+    const pairAddress = await factory.getPair(tokenAddress, cfg.weth);
+
+    if (!pairAddress || pairAddress === ethers.ZeroAddress) {
+      return res.json({ dex: cfg.dex, configured: true, pairExists: false, pairAddress: null });
+    }
+
+    const pair = new ethers.Contract(pairAddress, V2_PAIR_ABI, provider);
+    const [reserves, token0, token1] = await Promise.all([
+      pair.getReserves(),
+      pair.token0(),
+      pair.token1(),
+    ]);
+
+    res.json({
+      dex: cfg.dex,
+      configured: true,
+      pairExists: true,
+      pairAddress,
+      token0,
+      token1,
+      reserve0: reserves[0].toString(),
+      reserve1: reserves[1].toString(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/marketplace/dex/quote?dex=uniswap|sushiswap&direction=eth_to_token|token_to_eth&amount=...
+router.get("/dex/quote", async (req, res) => {
+  const { direction, amount } = req.query;
+  if (!direction || !amount) {
+    return res.status(400).json({ error: "direction and amount required" });
+  }
+
+  try {
+    const cfg = getDexConfig(req.query.dex);
+    const addresses = getAddresses();
+    const tokenAddress = addresses.PropertyToken_PAR7E;
+
+    if (!cfg.router || !cfg.weth || !tokenAddress) {
+      return res.status(400).json({ error: "DEX is not configured" });
+    }
+
+    const provider = getProvider();
+    const router = new ethers.Contract(cfg.router, V2_ROUTER_ABI, provider);
+
+    if (direction === "eth_to_token") {
+      const ethIn = ethers.parseEther(amount);
+      const path = [cfg.weth, tokenAddress];
+      const amounts = await router.getAmountsOut(ethIn, path);
+      return res.json({
+        dex: cfg.dex,
+        tokenOut: amounts[1].toString(),
+        ethIn: ethIn.toString(),
+        path,
+      });
+    }
+
+    if (direction === "token_to_eth") {
+      const tokenIn = BigInt(amount);
+      const path = [tokenAddress, cfg.weth];
+      const amounts = await router.getAmountsOut(tokenIn, path);
+      return res.json({
+        dex: cfg.dex,
+        ethOut: amounts[1].toString(),
+        ethOutFormatted: ethers.formatEther(amounts[1]),
+        tokenIn: tokenIn.toString(),
+        path,
+      });
+    }
+
+    res.status(400).json({ error: "direction must be eth_to_token or token_to_eth" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

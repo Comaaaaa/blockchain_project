@@ -46,6 +46,34 @@ export const TokenSwapPoolABI = [
   { anonymous: false, inputs: [{ indexed: true, name: 'user', type: 'address' }, { indexed: false, name: 'tokenIn', type: 'uint256' }, { indexed: false, name: 'ethOut', type: 'uint256' }], name: 'SwapTokenForETH', type: 'event' },
 ] as const;
 
+export const UniswapV2RouterABI = [
+  {
+    inputs: [
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    name: 'swapExactETHForTokens',
+    outputs: [{ name: 'amounts', type: 'uint256[]' }],
+    stateMutability: 'payable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    name: 'swapExactTokensForETH',
+    outputs: [{ name: 'amounts', type: 'uint256[]' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
+
 export const PriceOracleABI = [
   { inputs: [{ name: 'token', type: 'address' }], name: 'getPrice', outputs: [{ name: 'price', type: 'uint256' }, { name: 'updatedAt', type: 'uint256' }, { name: 'confidence', type: 'uint256' }], stateMutability: 'view', type: 'function' },
   { inputs: [{ name: 'token', type: 'address' }, { name: 'maxAge', type: 'uint256' }], name: 'isPriceStale', outputs: [{ type: 'bool' }], stateMutability: 'view', type: 'function' },
@@ -81,5 +109,10 @@ export function getContractAddresses(): Record<string, string> {
     PropertyMarketplace: process.env.NEXT_PUBLIC_PROPERTY_MARKETPLACE || '',
     NFTMarketplace: process.env.NEXT_PUBLIC_NFT_MARKETPLACE || '',
     TokenSwapPool: process.env.NEXT_PUBLIC_TOKEN_SWAP_POOL || '',
+    UniswapV2Router: process.env.NEXT_PUBLIC_UNISWAP_V2_ROUTER || '',
+    UniswapV2Factory: process.env.NEXT_PUBLIC_UNISWAP_V2_FACTORY || '',
+    SushiswapV2Router: process.env.NEXT_PUBLIC_SUSHISWAP_V2_ROUTER || '',
+    SushiswapV2Factory: process.env.NEXT_PUBLIC_SUSHISWAP_V2_FACTORY || '',
+    WETH: process.env.NEXT_PUBLIC_WETH_ADDRESS || '',
   };
 }

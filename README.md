@@ -30,10 +30,89 @@ blockchain_project/
 
 - Ecosysteme mature avec outils de developpement (Hardhat, Wagmi, Viem)
 - Smart contracts en Solidity (ERC-20, ERC-721)
-- DEX integre (pool AMM type Uniswap V2)
+- DEX integre (pool AMM interne + integration explicite Uniswap/Sushiswap V2)
 - Grande communaute et documentation extensive
 - Compatible avec les wallets standards (MetaMask, WalletConnect)
 - Testnet Sepolia gratuit et stable pour le deploiement
+
+## Conformite au sujet final (checklist)
+
+### 1) Tokenisation des RWA
+- ✅ **Fungible token**: `PropertyToken.sol` (ERC-20) pour parts de proprietes.
+- ✅ **Non-fungible token**: `PropertyNFT.sol` (ERC-721) pour actifs uniques.
+- ✅ Actif choisi: immobilier tokenise (RWA reel).
+
+### 2) Compliance on-chain (KYC + whitelist + blacklist)
+- ✅ `ComplianceRegistry.sol` implemente whitelist/blacklist + timestamp KYC.
+- ✅ Enforcement **on-chain** dans `_update()` de `PropertyToken.sol` et `PropertyNFT.sol`.
+- ✅ Les swaps/trades exigent aussi `isCompliant(msg.sender)` dans les marketplaces/pool.
+
+### 3) Trading on-chain + DEX
+- ✅ Marketplace on-chain ERC-20: `PropertyMarketplace.sol`.
+- ✅ Marketplace on-chain NFT: `NFTMarketplace.sol`.
+- ✅ Pool AMM interne: `TokenSwapPool.sol`.
+- ✅ **Integration explicite Uniswap/Sushiswap V2**:
+  - Backend quote/pair endpoints: `GET /api/marketplace/dex/quote`, `GET /api/marketplace/dex/pair`
+  - Frontend swap via router V2 (Uniswap/Sushiswap) sur la page `/swap`
+  - Script setup liquidite/pair: `blockchain/scripts/setup-uniswap-v2.js`
+
+### 4) Real-time on-chain awareness (Indexer)
+- ✅ Indexer cron (chaque minute) qui sync les events on-chain vers SQLite.
+- ✅ Indexation des events de compliance, achats, listings, pool swaps, oracle.
+- ✅ Indexation des swaps **Uniswap/Sushiswap V2 pair** (event `Swap`) pour remonter les operations faites hors UI.
+
+### 5) Oracle
+- ✅ `PriceOracle.sol` on-chain (price, confidence, stale check).
+- ✅ Service backend `oracle.js` qui pousse des updates on-chain toutes les 5 min.
+- ✅ API et affichage frontend du prix + historique.
+
+---
+
+## Integration explicite Uniswap/Sushiswap V2
+
+### Variables d'environnement
+
+Backend (`backend/.env`) :
+
+```bash
+UNISWAP_V2_ROUTER_ADDRESS=0x...
+UNISWAP_V2_FACTORY_ADDRESS=0x...
+SUSHISWAP_V2_ROUTER_ADDRESS=0x...
+SUSHISWAP_V2_FACTORY_ADDRESS=0x...
+WETH_ADDRESS=0x...
+```
+
+Frontend (`frontend/.env.local`) :
+
+```bash
+NEXT_PUBLIC_UNISWAP_V2_ROUTER=0x...
+NEXT_PUBLIC_UNISWAP_V2_FACTORY=0x...
+NEXT_PUBLIC_SUSHISWAP_V2_ROUTER=0x...
+NEXT_PUBLIC_SUSHISWAP_V2_FACTORY=0x...
+NEXT_PUBLIC_WETH_ADDRESS=0x...
+```
+
+### Setup pair + liquidite (Sepolia)
+
+```bash
+cd blockchain
+npm run setup:uniswap:sepolia
+```
+
+Ce script:
+- Ajoute de la liquidite `PAR7E/WETH` via le router V2.
+- Recupere l'adresse de pair depuis la factory.
+- Whitelist la pair dans `ComplianceRegistry` (necessaire pour respecter la logique KYC on-chain de `PropertyToken`).
+
+---
+
+## Livrables demandés (a completer pour la remise)
+
+- ⬜ Frontend heberge (URL de prod testnet): `https://...`
+- ⬜ Repo GitHub public (single repo): `https://github.com/...`
+- ✅ Code source complet (smart contracts + backend + frontend)
+- ✅ README technique + choix de design
+- ⬜ Demo presentation (tokenization + compliance + trading + oracle + sync on-chain)
 
 ## Fonctionnalites implementees
 
@@ -434,19 +513,6 @@ Verifie : connexion RPC, wallet, contrats on-chain, config frontend, etat de la 
 | PropertyMarketplace | `0x4Ffdc072...` | Marketplace de trading on-chain |
 | TokenSwapPool | `0x083DAc70...` | Pool AMM (liquidite ETH/PAR7E) |
 | PriceOracle | `0x3bB2d55A...` | Oracle de prix on-chain |
-
-## Tests
-
-```bash
-cd blockchain && npx hardhat test
-```
-
-52 tests couvrant toutes les specifications :
-- Tokenisation (ERC-20 + ERC-721)
-- Compliance on-chain (whitelist/blacklist enforcement)
-- Trading (marketplace + AMM pool)
-- Oracle (prix, confiance, staleness)
-- Integration (cross-contract compliance)
 
 ## API Backend
 
