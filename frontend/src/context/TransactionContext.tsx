@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import { Transaction } from '@/types';
 import { api } from '@/lib/api';
-import { formatEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 
 interface TransactionState {
   transactions: Transaction[];
@@ -66,13 +66,16 @@ function mapApiTransaction(t: any): Transaction {
  */
 async function saveTransactionToBackend(tx: Transaction) {
   try {
+    const totalAmountWei = tx.totalAmountWei
+      || (tx.totalAmount > 0 ? parseEther(String(tx.totalAmount)).toString() : '0');
+
     await api.postTransaction({
       type: tx.type === 'dividend' ? 'purchase' : tx.type,
       property_id: tx.propertyId || undefined,
       from_address: tx.from,
       to_address: tx.to,
       tokens: tx.tokens,
-      total_amount_wei: tx.totalAmountWei || String(tx.totalAmount),
+      total_amount_wei: totalAmountWei,
       tx_hash: tx.txHash,
       status: tx.status,
     });

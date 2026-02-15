@@ -19,6 +19,12 @@ export function formatNumber(num: number): string {
 }
 
 export function formatETH(wei: string | number | bigint): string {
+  if (typeof wei === 'number') {
+    if (!Number.isFinite(wei) || !Number.isInteger(wei)) {
+      throw new Error('formatETH expected an integer number of wei when called with a number');
+    }
+  }
+
   const weiBig = BigInt(wei);
   const WEI_PER_ETH = 10n ** 18n;
   const WEI_PER_MICRO_ETH = 10n ** 12n;

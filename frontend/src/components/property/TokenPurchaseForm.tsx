@@ -40,6 +40,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
   const totalCostWei = BigInt(tokenPriceWei) * BigInt(tokens);
   const maxTokens = property.tokenInfo.availableTokens;
   const tokenAddress = property.tokenInfo.contractAddress;
+  const canPurchase = isConnected && isCompliant === true;
 
   const handlePurchase = async () => {
     if (tokens < 1 || tokens > maxTokens) return;
@@ -60,6 +61,12 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         return;
       }
 
+      if (isCompliant !== true) {
+        setResult({ success: false, message: 'Votre wallet doit etre whiteliste KYC avant achat.' });
+        setLoading(false);
+        return;
+      }
+
       // Call buyTokens on the PropertyToken contract
       // tokenPrice is in wei — send exact cost
       const hash = await writeContractAsync({
@@ -68,7 +75,6 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         functionName: 'buyTokens',
         args: [BigInt(tokens)],
         value: totalCostWei,
-        gas: BigInt(300000),
       });
 
       // Record transaction (persisted to backend)
@@ -226,7 +232,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         <Button
           onClick={handlePurchase}
           loading={loading}
-          disabled={tokens < 1 || tokens > maxTokens || !isConnected}
+          disabled={tokens < 1 || tokens > maxTokens || !canPurchase}
           className="w-full"
           size="lg"
         >

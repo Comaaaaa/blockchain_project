@@ -109,8 +109,10 @@ export default function SwapPage() {
 
     try {
       let hash: string;
+      let totalAmountWei = '0';
 
       if (direction === 'eth_to_token') {
+        totalAmountWei = parseEther(amount).toString();
         if (dex === 'pool') {
           hash = await writeContractAsync({
             address: addresses.TokenSwapPool as `0x${string}`,
@@ -154,6 +156,9 @@ export default function SwapPage() {
         });
 
         if (dex === 'pool') {
+          const q = await api.getSwapQuote('token_to_eth', amount);
+          totalAmountWei = q.ethOut ? String(q.ethOut) : '0';
+
           hash = await writeContractAsync({
             address: addresses.TokenSwapPool as `0x${string}`,
             abi: TokenSwapPoolABI,
@@ -166,6 +171,7 @@ export default function SwapPage() {
             'token_to_eth',
             amount
           );
+          totalAmountWei = q.ethOut ? String(q.ethOut) : '0';
           const outMin = (BigInt(q.ethOut) * BigInt(98)) / BigInt(100);
           const routerAddress =
             dex === 'uniswap' ? addresses.UniswapV2Router : addresses.SushiswapV2Router;
@@ -198,7 +204,8 @@ export default function SwapPage() {
         to: direction === 'eth_to_token' ? address! : address!,
         tokens: direction === 'eth_to_token' ? 0 : parseInt(amount),
         pricePerToken: 0,
-        totalAmount: direction === 'eth_to_token' ? parseFloat(amount) : 0,
+        totalAmount: Number(formatEther(BigInt(totalAmountWei))),
+        totalAmountWei,
         txHash: hash,
         status: 'confirmed',
         createdAt: new Date().toISOString(),
