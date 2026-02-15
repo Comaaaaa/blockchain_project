@@ -2,6 +2,21 @@ const hre = require("hardhat");
 const { properties, ETH_EUR_RATE } = require("../properties-config");
 
 async function main() {
+  const envNftListPriceEth = process.env.NFT_LISTING_PRICE_ETH;
+  const envLiquidityTokens = process.env.INITIAL_LIQUIDITY_TOKENS;
+  const envLiquidityEth = process.env.INITIAL_LIQUIDITY_ETH;
+  const envDemoListingTokens = process.env.DEMO_LISTING_TOKENS;
+
+  const liquidityTokens = Number(envLiquidityTokens || "200");
+  if (!Number.isFinite(liquidityTokens) || liquidityTokens <= 0) {
+    throw new Error("INITIAL_LIQUIDITY_TOKENS must be a positive number");
+  }
+
+  const demoListingTokens = Number(envDemoListingTokens || "50");
+  if (!Number.isFinite(demoListingTokens) || demoListingTokens <= 0) {
+    throw new Error("DEMO_LISTING_TOKENS must be a positive number");
+  }
+
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deploying contracts with account:", deployer.address);
   console.log("Account balance:", (await hre.ethers.provider.getBalance(deployer.address)).toString());
@@ -142,7 +157,7 @@ async function main() {
   // List NFT #0 and #1 for sale on the NFTMarketplace
   for (let tokenId = 0; tokenId < 2; tokenId++) {
     const prop = nftProperties[tokenId];
-    const listPriceETH = (prop.price / ETH_EUR_RATE).toFixed(18);
+    const listPriceETH = envNftListPriceEth || (prop.price / ETH_EUR_RATE).toFixed(18);
     const listPrice = hre.ethers.parseEther(listPriceETH);
     // Approve the NFTMarketplace to transfer this NFT
     const txApprove = await propertyNFT.approve(nftMarketplaceAddr, tokenId);
@@ -155,26 +170,26 @@ async function main() {
 
   // 10. Provide initial liquidity to the pool
   console.log("\n--- Adding initial liquidity ---");
-  const liquidityTokens = 200; // 200 tokens
   // Liquidite ETH proportionnelle au prix des tokens
   const firstTokenPriceWei = BigInt(deployedPropertyTokens[0].instance ? properties.find(p => p.token_symbol === deployedPropertyTokens[0].symbol).token_price_wei : "0");
-  const liquidityETHWei = firstTokenPriceWei * BigInt(liquidityTokens);
+  const liquidityETHWei = envLiquidityEth
+    ? hre.ethers.parseEther(envLiquidityEth)
+    : firstTokenPriceWei * BigInt(liquidityTokens);
   const liquidityETHFormatted = hre.ethers.formatEther(liquidityETHWei);
 
   // Approve swapPool to spend deployer's tokens
-  await firstPropertyTokenInstance.approve(swapPoolAddr, liquidityTokens);
-  await swapPool.addLiquidity(liquidityTokens, { value: liquidityETHWei });
+  await firstPropertyTokenInstance.approve(swapPoolAddr, BigInt(liquidityTokens));
+  await swapPool.addLiquidity(BigInt(liquidityTokens), { value: liquidityETHWei });
   console.log(`Added liquidity: ${liquidityTokens} ${deployedPropertyTokens[0].symbol} + ${liquidityETHFormatted} ETH`);
 
   // 11. Create a demo token marketplace listing
   console.log("\n--- Creating demo token listing ---");
-  const demoListingTokens = 50; // List 50 tokens for sale
   const demoTokenPrice = BigInt(properties[0].token_price_wei);
   // Approve the marketplace to transfer tokens from deployer
-  await firstPropertyTokenInstance.approve(marketplaceAddr, demoListingTokens);
+  await firstPropertyTokenInstance.approve(marketplaceAddr, BigInt(demoListingTokens));
   const txCreateListing = await marketplace.createListing(
     firstPropertyTokenAddr,
-    demoListingTokens,
+    BigInt(demoListingTokens),
     demoTokenPrice
   );
   await txCreateListing.wait();

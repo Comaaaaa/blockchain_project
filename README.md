@@ -179,6 +179,51 @@ Ce script:
 - Recupere l'adresse de pair depuis la factory.
 - Whitelist la pair dans `ComplianceRegistry` (necessaire pour respecter la logique KYC on-chain de `PropertyToken`).
 
+## Demo Sepolia faible cout (< 0.02 ETH)
+
+Pour les soutenances avec peu de fonds faucet, le projet supporte un profil de deploiement low-cost.
+
+### Option 1 — Script npm preconfigure
+
+```bash
+cd blockchain
+npm run deploy:sepolia:lowcost
+```
+
+Ce profil applique:
+- `ETH_EUR_RATE=250000` (tokens ~100x moins chers que le profil standard),
+- `NFT_LISTING_PRICE_ETH=0.003`,
+- `INITIAL_LIQUIDITY_TOKENS=2`,
+- `DEMO_LISTING_TOKENS=2`.
+
+### Option 2 — Ajustement fin via variables d'environnement
+
+```bash
+cd blockchain
+ETH_EUR_RATE=300000 \
+NFT_LISTING_PRICE_ETH=0.002 \
+INITIAL_LIQUIDITY_TOKENS=1 \
+INITIAL_LIQUIDITY_ETH=0.002 \
+DEMO_LISTING_TOKENS=1 \
+npx hardhat run scripts/deploy.js --network sepolia
+```
+
+Variables supportees par `scripts/deploy.js`:
+- `ETH_EUR_RATE`: base de calcul du prix token (dans `properties-config.js`),
+- `NFT_LISTING_PRICE_ETH`: force le prix des NFTs listes pendant le deploy,
+- `INITIAL_LIQUIDITY_TOKENS`: quantite de tokens injectes dans `TokenSwapPool`,
+- `INITIAL_LIQUIDITY_ETH`: override explicite de l'ETH injecte dans le pool,
+- `DEMO_LISTING_TOKENS`: quantite de tokens mises en vente sur le marketplace.
+
+### Budget de demo recommande
+
+- Deploy contrats: ~0.008–0.012 ETH (selon congestion)
+- 1 achat token + 1 achat NFT live: ~0.003–0.006 ETH
+- Marge securite: ~0.003 ETH
+- **Total cible**: ~0.015–0.02 ETH
+
+Conseil demo: executer toutes les operations de setup avant la soutenance, puis ne faire que 1–2 transactions live.
+
 ---
 
 ## Livrables demandés (a completer pour la remise)
@@ -206,7 +251,7 @@ Ce script:
 ### 3. Trading on-chain
 - **PropertyMarketplace.sol** : Marketplace on-chain pour echanger des tokens entre utilisateurs whitelistes
 - **TokenSwapPool.sol** : Pool AMM (x*y=k) pour swapper PAR7E tokens contre ETH
-- Liquidite initiale fournie au deploiement (200 tokens + 0.2 ETH)
+- Liquidite initiale fournie au deploiement (parametrable via variables d'environnement)
 - Fee de swap : 0.3%
 - Interface de swap (page `/swap`)
 
