@@ -14,7 +14,7 @@ import {
 } from '@/lib/contracts';
 import { useTransactionContext } from '@/context/TransactionContext';
 import { useAccount, useWriteContract } from 'wagmi';
-import { parseEther, formatEther } from 'viem';
+import { parseEther, formatEther, parseUnits, formatUnits } from 'viem';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ArrowsRightLeftIcon,
@@ -38,6 +38,26 @@ export default function SwapPage() {
   const [priceHistory, setPriceHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const tokenDecimals = Number(
+    (dex === 'pool' ? poolInfo?.tokenDecimals : dexPairInfo?.tokenDecimals) ?? 18
+  );
+
+  const formatEthValue = (value: string | number | bigint, maximumFractionDigits = 6) => {
+    try {
+      const numeric = Number(typeof value === 'bigint' ? formatEther(value) : value);
+      if (!Number.isFinite(numeric)) return '0';
+      return numeric.toLocaleString('fr-FR', { maximumFractionDigits });
+    } catch {
+      return '0';
+    }
+  };
+
+  const formatTokenValue = (value: string | number | bigint) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '0';
+    return numeric.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  };
 
   const fetchPoolInfo = async () => {
     try {
@@ -84,9 +104,10 @@ export default function SwapPage() {
           ? await api.getSwapQuote(direction, amount)
           : await api.getDexQuote(dex === 'uniswap' ? 'uniswap' : 'sushiswap', direction, amount);
       if (direction === 'eth_to_token') {
-        setQuote(`${q.tokenOut} PAR7E`);
+        const tokenOutValue = q.tokenOutFormatted ?? q.tokenOut;
+        setQuote(`${formatTokenValue(tokenOutValue)} PAR7E`);
       } else {
-        setQuote(`${q.ethOutFormatted} ETH`);
+        setQuote(`${formatEthValue(q.ethOutFormatted, 8)} ETH`);
       }
     } catch {
       setQuote('Liquidite insuffisante');
@@ -110,12 +131,15 @@ export default function SwapPage() {
     try {
       let hash: string;
       let totalAmountWei = '0';
+      let swapTokens = 0;
       const propertyTokenAddress = addresses.PropertyToken_PAR7E as `0x${string}`;
       const wethAddress = addresses.WETH as `0x${string}`;
 
       if (direction === 'eth_to_token') {
         totalAmountWei = parseEther(amount).toString();
         if (dex === 'pool') {
+          const q = await api.getSwapQuote('eth_to_token', amount);
+          swapTokens = Number(q.tokenOutFormatted || 0);
           hash = await writeContractAsync({
             address: addresses.TokenSwapPool as `0x${string}`,
             abi: TokenSwapPoolABI,
@@ -128,6 +152,7 @@ export default function SwapPage() {
             'eth_to_token',
             amount
           );
+          swapTokens = Number(q.tokenOutFormatted || 0);
           const outMin = (BigInt(q.tokenOut) * BigInt(98)) / BigInt(100);
           const routerAddress =
             dex === 'uniswap' ? addresses.UniswapV2Router : addresses.SushiswapV2Router;
@@ -142,6 +167,8 @@ export default function SwapPage() {
           });
         }
       } else {
+        const tokenInWei = parseUnits(amount, tokenDecimals);
+        swapTokens = Number(formatUnits(tokenInWei, tokenDecimals));
         const spender =
           dex === 'pool'
             ? addresses.TokenSwapPool
@@ -154,7 +181,7 @@ export default function SwapPage() {
           address: propertyTokenAddress,
           abi: PropertyTokenABI,
           functionName: 'approve',
-          args: [spender as `0x${string}`, BigInt(amount)],
+          args: [spender as `0x${string}`, tokenInWei],
         });
 
         if (dex === 'pool') {
@@ -165,7 +192,7 @@ export default function SwapPage() {
             address: addresses.TokenSwapPool as `0x${string}`,
             abi: TokenSwapPoolABI,
             functionName: 'swapTokenForETH',
-            args: [BigInt(amount)],
+            args: [tokenInWei],
           });
         } else {
           const q = await api.getDexQuote(
@@ -184,7 +211,7 @@ export default function SwapPage() {
             abi: UniswapV2RouterABI,
             functionName: 'swapExactTokensForETH',
             args: [
-              BigInt(amount),
+              tokenInWei,
               outMin,
               [propertyTokenAddress, wethAddress],
               address as `0x${string}`,
@@ -198,13 +225,18 @@ export default function SwapPage() {
       addTransaction({
         id: uuidv4(),
         type: 'swap',
-        propertyId: '',
+        propertyId: 'prop-001',
         propertyTitle:
           (direction === 'eth_to_token' ? 'ETH → PAR7E' : 'PAR7E → ETH') +
           (dex === 'pool' ? ' (Pool)' : dex === 'uniswap' ? ' (Uniswap)' : ' (Sushiswap)'),
         from: direction === 'eth_to_token' ? address! : address!,
         to: direction === 'eth_to_token' ? address! : address!,
-        tokens: direction === 'eth_to_token' ? 0 : parseInt(amount),
+        tokens:
+          Number.isFinite(swapTokens)
+            ? direction === 'eth_to_token'
+              ? swapTokens
+              : -swapTokens
+            : 0,
         pricePerToken: 0,
         totalAmount: Number(formatEther(BigInt(totalAmountWei))),
         totalAmountWei,
@@ -235,7 +267,7 @@ export default function SwapPage() {
   return (
     <PageContainer
       title="Swap & Liquidite"
-      subtitle="Echangez des tokens PAR7E contre de l'ETH via le pool AMM on-chain"
+      subtitle="Echangez des tokens PAR7E contre de l'ETH via le pool interne ou un DEX"
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Swap Form */}
@@ -314,7 +346,7 @@ export default function SwapPage() {
               <Input
                 label={direction === 'eth_to_token' ? 'Montant ETH' : 'Nombre de tokens PAR7E'}
                 type="number"
-                step={direction === 'eth_to_token' ? '0.001' : '1'}
+                step={direction === 'eth_to_token' ? '0.001' : tokenDecimals > 0 ? '0.0001' : '1'}
                 min="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
@@ -325,7 +357,9 @@ export default function SwapPage() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600">Vous recevrez environ :</p>
                   <p className="text-xl font-bold text-orange">{quote}</p>
-                  <p className="text-xs text-gray-400 mt-1">Fee: 0.3% (pool AMM)</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Frais estimes: 0.3% ({dex === 'pool' ? 'pool interne' : 'DEX V2'})
+                    </p>
                 </div>
               )}
 
@@ -365,26 +399,52 @@ export default function SwapPage() {
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <ChartBarIcon className="h-5 w-5 text-blue-500" />
-              Pool de liquidite
+              {dex === 'pool' ? 'Pool de liquidite' : `Liquidite ${dex === 'uniswap' ? 'Uniswap V2' : 'Sushiswap V2'}`}
             </h3>
-            {poolInfo ? (
+            {dex === 'pool' && poolInfo ? (
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Reserve ETH</span>
-                  <span className="font-medium">{poolInfo.reserveETHFormatted} ETH</span>
+                  <span className="font-medium">{formatEthValue(poolInfo.reserveETHFormatted)} ETH</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Reserve PAR7E</span>
-                  <span className="font-medium">{poolInfo.reserveToken} tokens</span>
+                  <span className="font-medium">{formatTokenValue(poolInfo.reserveTokenFormatted)} tokens</span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
                   <span className="text-gray-600">Prix spot</span>
-                  <span className="font-bold text-orange">{poolInfo.spotPriceETH} ETH/token</span>
+                  <span className="font-bold text-orange">{formatEthValue(poolInfo.spotPriceETH, 8)} ETH / PAR7E</span>
                 </div>
               </div>
+            ) : dex !== 'pool' && dexPairInfo?.configured && dexPairInfo?.pairExists ? (
+              (() => {
+                const reserveEthNum = Number(dexPairInfo.reserveETHFormatted || '0');
+                const reserveTokenNum = Number(dexPairInfo.reserveTokenFormatted || '0');
+                const spot =
+                  Number.isFinite(reserveEthNum) && Number.isFinite(reserveTokenNum) && reserveTokenNum > 0
+                    ? reserveEthNum / reserveTokenNum
+                    : 0;
+
+                return (
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Reserve ETH</span>
+                      <span className="font-medium">{formatEthValue(reserveEthNum)} ETH</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Reserve PAR7E</span>
+                      <span className="font-medium">{formatTokenValue(reserveTokenNum)} tokens</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-2">
+                      <span className="text-gray-600">Prix spot</span>
+                      <span className="font-bold text-orange">{formatEthValue(spot, 8)} ETH / PAR7E</span>
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <p className="text-gray-400 text-sm">
-                {dex === 'pool' ? 'Pool non disponible' : 'Infos pair DEX non disponibles'}
+                {dex === 'pool' ? 'Pool non disponible' : 'Infos de paire DEX non disponibles'}
               </p>
             )}
 
@@ -408,7 +468,7 @@ export default function SwapPage() {
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Prix PAR7E</span>
-                  <span className="font-bold text-orange">{oraclePrice.priceETH} ETH</span>
+                  <span className="font-bold text-orange">{formatEthValue(oraclePrice.priceETH, 8)} ETH</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Confiance</span>
@@ -431,7 +491,7 @@ export default function SwapPage() {
             {priceHistory.length > 0 && (
               <div className="mt-4">
                 <h4 className="text-xs font-semibold text-gray-500 mb-2">
-                  Historique ({priceHistory.length} entrees)
+                  Historique ({Math.min(priceHistory.length, 10)} entrees)
                 </h4>
                 <div className="max-h-32 overflow-y-auto space-y-1">
                   {priceHistory.slice(0, 10).map((p, i) => (

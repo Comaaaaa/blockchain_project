@@ -4,6 +4,34 @@ const { ethers } = require("ethers");
 const { getContract, getAddresses, getProvider } = require("../services/blockchain");
 
 const router = express.Router();
+const SWAP_TOKEN_DECIMALS = Number(process.env.SWAP_TOKEN_DECIMALS || "0");
+
+const ERC20_METADATA_ABI = [
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+];
+
+async function getTokenMetadata(tokenAddress) {
+  const provider = getProvider();
+  const token = new ethers.Contract(tokenAddress, ERC20_METADATA_ABI, provider);
+  let erc20Decimals = 18;
+  let symbol = "TOKEN";
+  try {
+    erc20Decimals = Number(await token.decimals());
+  } catch {
+    // default decimals
+  }
+  try {
+    symbol = await token.symbol();
+  } catch {
+    // default symbol
+  }
+  return {
+    symbol,
+    erc20Decimals,
+    swapDecimals: Number.isFinite(SWAP_TOKEN_DECIMALS) ? SWAP_TOKEN_DECIMALS : 0,
+  };
+}
 
 // GET /api/marketplace/listings — All active listings (enriched with property data)
 router.get("/listings", (req, res) => {
@@ -84,8 +112,9 @@ router.get("/listings/:id", async (req, res) => {
 // GET /api/marketplace/pool — Get swap pool info
 router.get("/pool", async (req, res) => {
   try {
-    const { ethers } = require("ethers");
     const swapPool = await getContract("TokenSwapPool");
+    const tokenAddress = await swapPool.token();
+    const tokenMeta = await getTokenMetadata(tokenAddress);
 
     const [reserveToken, reserveETH, totalLiquidity] = await Promise.all([
       swapPool.reserveToken(),
@@ -93,20 +122,35 @@ router.get("/pool", async (req, res) => {
       swapPool.totalLiquidity(),
     ]);
 
-    let spotPrice = "0";
+    let spotPriceWei = "0";
     try {
-      spotPrice = (await swapPool.getSpotPrice()).toString();
+      spotPriceWei = (await swapPool.getSpotPrice()).toString();
     } catch {
       // Pool may be empty
     }
 
+    const reserveTokenFormatted = ethers.formatUnits(reserveToken, tokenMeta.swapDecimals);
+    let spotPriceETH = "0";
+    if (reserveToken > 0n) {
+      const reserveEthNum = Number(ethers.formatEther(reserveETH));
+      const reserveTokenNum = Number(reserveTokenFormatted);
+      if (Number.isFinite(reserveEthNum) && Number.isFinite(reserveTokenNum) && reserveTokenNum > 0) {
+        spotPriceETH = (reserveEthNum / reserveTokenNum).toFixed(12).replace(/\.?0+$/, "");
+      }
+    }
+
     res.json({
+      tokenAddress,
+      tokenSymbol: tokenMeta.symbol,
+      tokenDecimals: tokenMeta.swapDecimals,
+      tokenDecimalsERC20: tokenMeta.erc20Decimals,
       reserveToken: reserveToken.toString(),
+      reserveTokenFormatted,
       reserveETH: reserveETH.toString(),
       reserveETHFormatted: ethers.formatEther(reserveETH),
       totalLiquidity: totalLiquidity.toString(),
-      spotPrice,
-      spotPriceETH: ethers.formatEther(spotPrice),
+      spotPriceWei,
+      spotPriceETH,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -121,20 +165,34 @@ router.get("/pool/quote", async (req, res) => {
   }
 
   try {
-    const { ethers } = require("ethers");
     const swapPool = await getContract("TokenSwapPool");
+    const tokenAddress = await swapPool.token();
+    const tokenMeta = await getTokenMetadata(tokenAddress);
 
     if (direction === "eth_to_token") {
       const ethIn = ethers.parseEther(amount);
       const tokenOut = await swapPool.getTokenOutForETH(ethIn);
-      res.json({ tokenOut: tokenOut.toString(), ethIn: ethIn.toString() });
+      res.json({
+        tokenAddress,
+        tokenSymbol: tokenMeta.symbol,
+        tokenDecimals: tokenMeta.swapDecimals,
+        tokenDecimalsERC20: tokenMeta.erc20Decimals,
+        tokenOut: tokenOut.toString(),
+        tokenOutFormatted: ethers.formatUnits(tokenOut, tokenMeta.swapDecimals),
+        ethIn: ethIn.toString(),
+      });
     } else if (direction === "token_to_eth") {
-      const tokenIn = parseInt(amount);
+      const tokenIn = ethers.parseUnits(String(amount), tokenMeta.swapDecimals);
       const ethOut = await swapPool.getETHOutForToken(tokenIn);
       res.json({
+        tokenAddress,
+        tokenSymbol: tokenMeta.symbol,
+        tokenDecimals: tokenMeta.swapDecimals,
+        tokenDecimalsERC20: tokenMeta.erc20Decimals,
         ethOut: ethOut.toString(),
         ethOutFormatted: ethers.formatEther(ethOut),
-        tokenIn,
+        tokenIn: tokenIn.toString(),
+        tokenInFormatted: String(amount),
       });
     } else {
       res.status(400).json({ error: "direction must be eth_to_token or token_to_eth" });
@@ -182,11 +240,19 @@ router.get("/dex/pair", async (req, res) => {
     const cfg = getDexConfig(req.query.dex);
     const addresses = getAddresses();
     const tokenAddress = addresses.PropertyToken_PAR7E;
+    let tokenMeta = { decimals: 18, symbol: "TOKEN" };
+    if (tokenAddress) {
+      tokenMeta = await getTokenMetadata(tokenAddress);
+    }
 
     if (!cfg.router || !cfg.factory || !cfg.weth || !tokenAddress) {
       return res.json({
         dex: cfg.dex,
         configured: false,
+        tokenAddress,
+        tokenSymbol: tokenMeta.symbol,
+        tokenDecimals: tokenMeta.swapDecimals,
+        tokenDecimalsERC20: tokenMeta.erc20Decimals,
         reason: "Missing DEX env vars or token address",
       });
     }
@@ -206,15 +272,29 @@ router.get("/dex/pair", async (req, res) => {
       pair.token1(),
     ]);
 
+    const reserve0 = reserves[0];
+    const reserve1 = reserves[1];
+    const token0IsWeth = token0.toLowerCase() === cfg.weth.toLowerCase();
+    const reserveEth = token0IsWeth ? reserve0 : reserve1;
+    const reserveToken = token0IsWeth ? reserve1 : reserve0;
+
     res.json({
       dex: cfg.dex,
       configured: true,
       pairExists: true,
+      tokenAddress,
+      tokenSymbol: tokenMeta.symbol,
+      tokenDecimals: tokenMeta.swapDecimals,
+      tokenDecimalsERC20: tokenMeta.erc20Decimals,
       pairAddress,
       token0,
       token1,
-      reserve0: reserves[0].toString(),
-      reserve1: reserves[1].toString(),
+      reserve0: reserve0.toString(),
+      reserve1: reserve1.toString(),
+      reserveETH: reserveEth.toString(),
+      reserveETHFormatted: ethers.formatEther(reserveEth),
+      reserveToken: reserveToken.toString(),
+      reserveTokenFormatted: ethers.formatUnits(reserveToken, tokenMeta.swapDecimals),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -237,6 +317,8 @@ router.get("/dex/quote", async (req, res) => {
       return res.status(400).json({ error: "DEX is not configured" });
     }
 
+    const tokenMeta = await getTokenMetadata(tokenAddress);
+
     const provider = getProvider();
     const router = new ethers.Contract(cfg.router, V2_ROUTER_ABI, provider);
 
@@ -246,21 +328,31 @@ router.get("/dex/quote", async (req, res) => {
       const amounts = await router.getAmountsOut(ethIn, path);
       return res.json({
         dex: cfg.dex,
+        tokenAddress,
+        tokenSymbol: tokenMeta.symbol,
+        tokenDecimals: tokenMeta.swapDecimals,
+        tokenDecimalsERC20: tokenMeta.erc20Decimals,
         tokenOut: amounts[1].toString(),
+        tokenOutFormatted: ethers.formatUnits(amounts[1], tokenMeta.swapDecimals),
         ethIn: ethIn.toString(),
         path,
       });
     }
 
     if (direction === "token_to_eth") {
-      const tokenIn = BigInt(amount);
+      const tokenIn = ethers.parseUnits(String(amount), tokenMeta.swapDecimals);
       const path = [tokenAddress, cfg.weth];
       const amounts = await router.getAmountsOut(tokenIn, path);
       return res.json({
         dex: cfg.dex,
+        tokenAddress,
+        tokenSymbol: tokenMeta.symbol,
+        tokenDecimals: tokenMeta.swapDecimals,
+        tokenDecimalsERC20: tokenMeta.erc20Decimals,
         ethOut: amounts[1].toString(),
         ethOutFormatted: ethers.formatEther(amounts[1]),
         tokenIn: tokenIn.toString(),
+        tokenInFormatted: String(amount),
         path,
       });
     }

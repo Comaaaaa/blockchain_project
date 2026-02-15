@@ -263,18 +263,26 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
         for (const tx of transactions) {
           if (tx.status && tx.status !== 'confirmed') continue;
-          if (tx.type !== 'purchase' && tx.type !== 'listing_sold') continue;
+          if (tx.type !== 'purchase' && tx.type !== 'listing_sold' && tx.type !== 'swap') continue;
 
           const isNftPurchase =
             String(tx.from_address || '').toLowerCase() === 'nft_marketplace'
             && tx.type === 'listing_sold';
+          const isSwap = tx.type === 'swap';
+          const swapTitle = String(tx.property_title || '');
+          const isSwapSell = isSwap && swapTitle.includes('PAR7E → ETH');
 
-          const tokens = Number(tx.tokens || (isNftPurchase ? 1 : 0));
-          if (tokens <= 0) continue;
+          const baseTokens = Number(tx.tokens || (isNftPurchase ? 1 : 0));
+          const tokens = isSwap
+            ? (isSwapSell ? -Math.abs(baseTokens) : Math.abs(baseTokens))
+            : baseTokens;
+          if (tokens === 0 || (!isSwap && tokens < 0)) continue;
 
           const propertyId = isNftPurchase
             ? `nft-${String(tx.tx_hash || tx.id || Date.now())}`
-            : String(tx.property_id || '');
+            : isSwap
+              ? String(tx.property_id || 'prop-001')
+              : String(tx.property_id || '');
           if (!propertyId) continue;
 
           const existing = aggregate.get(propertyId) || {
@@ -282,16 +290,26 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             totalInvestedEUR: 0,
             purchaseDate: String(tx.created_at || new Date().toISOString()),
             isNft: isNftPurchase,
-            label: isNftPurchase ? (tx.property_title || 'NFT TokenImmo (Marketplace)') : undefined,
+            label: isNftPurchase
+              ? (tx.property_title || 'NFT TokenImmo (Marketplace)')
+              : isSwap
+                ? 'PAR7E'
+                : undefined,
           };
 
           const investedEUR = tx.total_amount_wei
             ? weiToEUR(BigInt(tx.total_amount_wei), ethPrice)
             : 0;
 
+          const nextTokens = existing.tokens + tokens;
+          if (nextTokens <= 0) {
+            aggregate.delete(propertyId);
+            continue;
+          }
+
           aggregate.set(propertyId, {
-            tokens: existing.tokens + tokens,
-            totalInvestedEUR: existing.totalInvestedEUR + investedEUR,
+            tokens: nextTokens,
+            totalInvestedEUR: existing.totalInvestedEUR + (isSwapSell ? -investedEUR : investedEUR),
             purchaseDate:
               new Date(tx.created_at || 0).getTime() > new Date(existing.purchaseDate).getTime()
                 ? existing.purchaseDate

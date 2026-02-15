@@ -7,6 +7,7 @@ import {
   shortenAddress,
   getTransactionTypeLabel,
   getTransactionStatusLabel,
+  formatNumber,
 } from '@/lib/utils';
 import Badge from '@/components/ui/Badge';
 import { useETHPrice, weiToEUR } from '@/hooks/useETHPrice';
@@ -75,7 +76,11 @@ export default function TransactionTable({ transactions }: TransactionTableProps
                 {tx.propertyTitle}
               </td>
               <td className="py-3 px-4 text-sm font-medium text-gray-900">
-                {tx.type === 'dividend' ? '-' : tx.tokens}
+                {tx.type === 'dividend'
+                  ? '-'
+                  : tx.type === 'swap'
+                    ? `${tx.tokens >= 0 ? '+' : ''}${formatNumber(tx.tokens)}`
+                    : formatNumber(tx.tokens)}
               </td>
               <td className="py-3 px-4 text-sm font-semibold text-gray-900">
                 {formatCurrency(

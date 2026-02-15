@@ -46,13 +46,24 @@ function mapApiTransaction(t: any): Transaction {
   const isNftMarketplacePurchase = fromAddress === 'nft_marketplace' && t.type === 'listing_sold';
   const mappedType = t.type === 'listing_sold' ? 'purchase' : t.type;
   const rawTokens = Number(t.tokens || 0);
-  const mappedTokens = isNftMarketplacePurchase && rawTokens === 0 ? 1 : rawTokens;
+  const swapTitle = String(t.property_title || '');
+  const isSwapSell = mappedType === 'swap' && swapTitle.includes('PAR7E → ETH');
+  const normalizedSwapTokens = mappedType === 'swap' ? (isSwapSell ? -Math.abs(rawTokens) : Math.abs(rawTokens)) : rawTokens;
+  const mappedTokens = isNftMarketplacePurchase && rawTokens === 0 ? 1 : normalizedSwapTokens;
+  const mappedPropertyId =
+    t.property_id
+    || (mappedType === 'swap' ? 'prop-001' : '')
+    || (isNftMarketplacePurchase ? `nft-${t.tx_hash || t.id}` : '');
+  const mappedPropertyTitle =
+    t.property_title
+    || (mappedType === 'swap' ? 'Swap PAR7E' : '')
+    || (isNftMarketplacePurchase ? 'NFT TokenImmo (Marketplace)' : '');
 
   return {
     id: t.id,
     type: mappedType,
-    propertyId: t.property_id || (isNftMarketplacePurchase ? `nft-${t.tx_hash || t.id}` : ''),
-    propertyTitle: t.property_title || (isNftMarketplacePurchase ? 'NFT TokenImmo (Marketplace)' : ''),
+    propertyId: mappedPropertyId,
+    propertyTitle: mappedPropertyTitle,
     from: t.from_address || '',
     to: t.to_address || '',
     tokens: mappedTokens,
