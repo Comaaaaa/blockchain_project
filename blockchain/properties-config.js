@@ -1,15 +1,15 @@
-// Taux de reference ETH/EUR utilise pour calculer les prix de tokens on-chain
+// Taux de reference ETH/EUR utilisé pour calculer les prix de tokens on-chain
 const ETH_EUR_RATE = Number(process.env.ETH_EUR_RATE || "2500"); // 1 ETH = 2 500 € par defaut
 
 if (!Number.isFinite(ETH_EUR_RATE) || ETH_EUR_RATE <= 0) {
   throw new Error("Invalid ETH_EUR_RATE env var. Expected a positive number.");
 }
 
-// Calcule le prix d'un token en wei a partir du prix EUR du bien et du nombre de tokens
+// Calcule le prix d'un token en wei à partir du prix EUR du bien et du nombre de tokens
 function computeTokenPriceWei(priceEUR, totalTokens) {
   const pricePerTokenEUR = priceEUR / totalTokens;
   const pricePerTokenETH = pricePerTokenEUR / ETH_EUR_RATE;
-  // Arrondi au wei pres (18 decimales)
+  // Arrondi au wei près (18 decimales)
   return BigInt(Math.round(pricePerTokenETH * 1e18)).toString();
 }
 
