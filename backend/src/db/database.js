@@ -123,6 +123,13 @@ function initTables() {
     // Column already exists, ignore
   }
 
+  // Backfill listing_status for existing rows
+  db.exec(`
+    UPDATE marketplace_listings
+    SET listing_status = CASE WHEN active = 1 THEN 'active' ELSE 'sold' END
+    WHERE listing_status IS NULL
+  `);
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS nfts (
       token_id INTEGER PRIMARY KEY,

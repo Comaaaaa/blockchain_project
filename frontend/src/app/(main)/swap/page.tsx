@@ -110,6 +110,8 @@ export default function SwapPage() {
     try {
       let hash: string;
       let totalAmountWei = '0';
+      const propertyTokenAddress = addresses.PropertyToken_PAR7E as `0x${string}`;
+      const wethAddress = addresses.WETH as `0x${string}`;
 
       if (direction === 'eth_to_token') {
         totalAmountWei = parseEther(amount).toString();
@@ -135,7 +137,7 @@ export default function SwapPage() {
             address: routerAddress as `0x${string}`,
             abi: UniswapV2RouterABI,
             functionName: 'swapExactETHForTokens',
-            args: [outMin, [addresses.WETH as `0x${string}`, addresses.PropertyToken_PAR7E as `0x${string}`], address as `0x${string}`, deadline],
+            args: [outMin, [wethAddress, propertyTokenAddress], address as `0x${string}`, deadline],
             value: parseEther(amount),
           });
         }
@@ -149,7 +151,7 @@ export default function SwapPage() {
 
         // Approve first
         await writeContractAsync({
-          address: addresses.PropertyToken_PAR7E as `0x${string}`,
+          address: propertyTokenAddress,
           abi: PropertyTokenABI,
           functionName: 'approve',
           args: [spender as `0x${string}`, BigInt(amount)],
@@ -184,7 +186,7 @@ export default function SwapPage() {
             args: [
               BigInt(amount),
               outMin,
-              [addresses.PropertyToken_PAR7E as `0x${string}`, addresses.WETH as `0x${string}`],
+              [propertyTokenAddress, wethAddress],
               address as `0x${string}`,
               deadline,
             ],

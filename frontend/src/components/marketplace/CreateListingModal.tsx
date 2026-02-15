@@ -51,7 +51,7 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
   const totalWei = priceWei * BigInt(tokens);
 
   const handleCreate = async () => {
-    if (!holding || tokens < 1 || !pricePerTokenETH || priceWei === 0n || !isConnected) return;
+    if (!holding || tokens < 1 || !pricePerTokenETH || priceWei === BigInt(0) || !isConnected) return;
 
     setLoading(true);
     setResult(null);
@@ -113,15 +113,15 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
             setSelectedProperty(e.target.value);
             const h = portfolioState.holdings.find((h) => h.propertyId === e.target.value);
             if (h) {
-              let baseWei = 0n;
+              let baseWei = BigInt(0);
               if (h.property.tokenInfo.tokenPriceWei) {
                 baseWei = BigInt(h.property.tokenInfo.tokenPriceWei);
               } else if (h.property.tokenInfo.tokenPrice > 0) {
                 baseWei = parseEther(String(h.property.tokenInfo.tokenPrice));
               }
 
-              if (baseWei > 0n) {
-                const suggestedWei = (baseWei * 105n) / 100n;
+              if (baseWei > BigInt(0)) {
+                const suggestedWei = (baseWei * BigInt(105)) / BigInt(100);
                 const suggestedEth = formatEther(suggestedWei);
                 const [intPart, fracPart = ''] = suggestedEth.split('.');
                 setPricePerTokenETH(`${intPart}.${fracPart.slice(0, 6)}`.replace(/\.$/, ''));
