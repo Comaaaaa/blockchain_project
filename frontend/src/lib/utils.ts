@@ -26,12 +26,12 @@ export function formatETH(wei: string | number | bigint): string {
   }
 
   const weiBig = BigInt(wei);
-  const WEI_PER_ETH = 10n ** 18n;
-  const WEI_PER_MICRO_ETH = 10n ** 12n;
-  const POINT0001_ETH_WEI = WEI_PER_ETH / 10_000n;
+  const WEI_PER_ETH = BigInt(10) ** BigInt(18);
+  const WEI_PER_MICRO_ETH = BigInt(10) ** BigInt(12);
+  const POINT0001_ETH_WEI = WEI_PER_ETH / BigInt(10000);
 
   const toFixedScaled = (scaledValue: bigint, decimals: number): string => {
-    const negative = scaledValue < 0n;
+    const negative = scaledValue < BigInt(0);
     let s = (negative ? -scaledValue : scaledValue).toString();
     while (s.length <= decimals) s = `0${s}`;
     const integerPart = s.slice(0, s.length - decimals);
@@ -40,11 +40,11 @@ export function formatETH(wei: string | number | bigint): string {
   };
 
   if (weiBig < POINT0001_ETH_WEI) {
-    const microEthScaled = (weiBig * 100n) / WEI_PER_MICRO_ETH;
+    const microEthScaled = (weiBig * BigInt(100)) / WEI_PER_MICRO_ETH;
     return `${toFixedScaled(microEthScaled, 2)} μETH`;
   }
 
-  const ethScaled = (weiBig * 10_000n) / WEI_PER_ETH;
+  const ethScaled = (weiBig * BigInt(10000)) / WEI_PER_ETH;
   return `${toFixedScaled(ethScaled, 4)} ETH`;
 }
 

@@ -23,8 +23,9 @@ export default function NFTsPage() {
         api.getNFTListings().catch(() => []),
       ]);
 
-      const mapped: NFT[] = nftData.map((item: any) => ({
-        tokenId: item.token_id ?? item.tokenId,
+      const mapped: NFT[] = nftData
+        .map((item: any) => ({
+        tokenId: Number(item.token_id ?? item.tokenId),
         ownerAddress: item.owner_address ?? item.ownerAddress,
         assetType: item.asset_type ?? item.assetType,
         location: item.location,
@@ -34,21 +35,24 @@ export default function NFTsPage() {
         propertyId: item.property_id ?? item.propertyId,
         propertyTitle: item.property_title ?? item.propertyTitle,
         propertyCity: item.property_city ?? item.propertyCity,
-      }));
+      }))
+        .filter((item) => Number.isFinite(item.tokenId));
       setNfts(mapped);
 
-      const mappedListings: NFTListing[] = listingData.map((item: any) => ({
-        listingId: item.id,
-        listingIdOnchain: item.listing_id_onchain,
+      const mappedListings: NFTListing[] = listingData
+        .map((item: any) => ({
+        listingId: Number(item.id),
+        listingIdOnchain: Number(item.listing_id_onchain ?? 0),
         seller: item.seller_address,
-        tokenId: item.nft_token_id,
+        tokenId: Number(item.nft_token_id),
         priceWei: item.price_wei,
         active: !!item.active,
         createdAt: item.created_at,
         assetType: item.asset_type,
         location: item.location,
         propertyTitle: item.property_title,
-      }));
+      }))
+        .filter((item) => Number.isFinite(item.listingId) && Number.isFinite(item.tokenId));
       setListings(mappedListings);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement des NFTs');

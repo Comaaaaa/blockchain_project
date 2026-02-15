@@ -7,10 +7,17 @@ import Tabs from '@/components/ui/Tabs';
 import Card from '@/components/ui/Card';
 import { useTransactionContext } from '@/context/TransactionContext';
 import { formatCurrency } from '@/lib/utils';
+import { useETHPrice, weiToEUR } from '@/hooks/useETHPrice';
 
 export default function TransactionsPage() {
   const { state } = useTransactionContext();
   const [filter, setFilter] = useState('all');
+  const { ethPrice } = useETHPrice();
+
+  const getAmountEUR = (totalAmountWei?: string, fallbackAmount?: number) => {
+    if (totalAmountWei) return weiToEUR(BigInt(totalAmountWei), ethPrice);
+    return fallbackAmount || 0;
+  };
 
   const filteredTransactions =
     filter === 'all'
@@ -19,15 +26,15 @@ export default function TransactionsPage() {
 
   const totalPurchases = state.transactions
     .filter((t) => t.type === 'purchase' && t.status === 'confirmed')
-    .reduce((sum, t) => sum + t.totalAmount, 0);
+    .reduce((sum, t) => sum + getAmountEUR(t.totalAmountWei, t.totalAmount), 0);
 
   const totalSales = state.transactions
     .filter((t) => t.type === 'sale' && t.status === 'confirmed')
-    .reduce((sum, t) => sum + t.totalAmount, 0);
+    .reduce((sum, t) => sum + getAmountEUR(t.totalAmountWei, t.totalAmount), 0);
 
   const totalDividends = state.transactions
     .filter((t) => t.type === 'dividend' && t.status === 'confirmed')
-    .reduce((sum, t) => sum + t.totalAmount, 0);
+    .reduce((sum, t) => sum + getAmountEUR(t.totalAmountWei, t.totalAmount), 0);
 
   const tabs = [
     { id: 'all', label: 'Toutes', count: state.transactions.length },

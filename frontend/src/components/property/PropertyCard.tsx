@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Property } from '@/types';
-import { formatCurrency, formatETH, getPropertyTypeLabel, getStatusLabel } from '@/lib/utils';
+import { formatETH, getPropertyTypeLabel, getStatusLabel } from '@/lib/utils';
+import { useETHPrice, formatWeiAsEUR } from '@/hooks/useETHPrice';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -24,7 +25,9 @@ function getStatusVariant(status: string): 'success' | 'warning' | 'info' | 'def
 }
 
 export default function PropertyCard({ property }: PropertyCardProps) {
+  const { ethPrice } = useETHPrice();
   const funded = property.tokenInfo.totalTokens - property.tokenInfo.availableTokens;
+  const imageSrc = property.images.find((img) => typeof img === 'string' && img.trim().length > 0);
   let tokenPriceWei = BigInt(0);
   try {
     if (property.tokenInfo.tokenPriceWei) {
@@ -39,13 +42,19 @@ export default function PropertyCard({ property }: PropertyCardProps) {
       <Card hover className="h-full flex flex-col">
         {/* Image */}
         <div className="relative h-48 overflow-hidden">
-          <Image
-            src={property.images[0]}
-            alt={property.title}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          />
+          {imageSrc ? (
+            <Image
+              src={imageSrc}
+              alt={property.title}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            />
+          ) : (
+            <div className="w-full h-full bg-gray-200 flex items-center justify-center text-sm text-gray-500">
+              No img
+            </div>
+          )}
           <div className="absolute top-3 left-3">
             <Badge variant={getStatusVariant(property.status)}>
               {getStatusLabel(property.status)}
@@ -71,7 +80,9 @@ export default function PropertyCard({ property }: PropertyCardProps) {
               <p className="text-2xl font-bold text-orange">
                 {tokenPriceWei > BigInt(0) ? formatETH(tokenPriceWei) : 'Prix non defini'}
               </p>
-              <p className="text-xs text-gray-500">par token</p>
+              <p className="text-xs text-gray-500">
+                ~{formatWeiAsEUR(tokenPriceWei, ethPrice)} · par token
+              </p>
             </div>
             <div className="text-right">
               <p className="text-lg font-semibold text-green-600">
@@ -91,8 +102,8 @@ export default function PropertyCard({ property }: PropertyCardProps) {
               <p>Pieces</p>
             </div>
             <div className="bg-gray-50 rounded-lg p-1.5">
-              <p className="font-semibold">{formatCurrency(property.price)}</p>
-              <p>Prix total</p>
+              <p className="font-semibold">{formatWeiAsEUR(tokenPriceWei * BigInt(property.tokenInfo.totalTokens), ethPrice)}</p>
+              <p>Val. tokenisee</p>
             </div>
           </div>
 

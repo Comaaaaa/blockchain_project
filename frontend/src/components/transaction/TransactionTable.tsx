@@ -9,6 +9,7 @@ import {
   getTransactionStatusLabel,
 } from '@/lib/utils';
 import Badge from '@/components/ui/Badge';
+import { useETHPrice, weiToEUR } from '@/hooks/useETHPrice';
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -35,6 +36,8 @@ function getStatusVariant(status: string): 'success' | 'danger' | 'warning' | 'd
 }
 
 export default function TransactionTable({ transactions }: TransactionTableProps) {
+  const { ethPrice } = useETHPrice();
+
   if (transactions.length === 0) {
     return (
       <div className="text-center py-12">
@@ -75,7 +78,11 @@ export default function TransactionTable({ transactions }: TransactionTableProps
                 {tx.type === 'dividend' ? '-' : tx.tokens}
               </td>
               <td className="py-3 px-4 text-sm font-semibold text-gray-900">
-                {formatCurrency(tx.totalAmount)}
+                {formatCurrency(
+                  tx.totalAmountWei
+                    ? weiToEUR(BigInt(tx.totalAmountWei), ethPrice)
+                    : tx.totalAmount
+                )}
               </td>
               <td className="py-3 px-4 text-sm text-gray-500 font-mono">
                 {shortenAddress(tx.txHash, 6)}

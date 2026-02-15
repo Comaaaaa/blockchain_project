@@ -145,7 +145,7 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
     const propertyId = property ? property.id : null;
 
     db.prepare(
-      `INSERT OR IGNORE INTO marketplace_listings (listing_id_onchain, seller_address, token_address, property_id, amount, price_per_token_wei, listing_status, active, tx_hash)
+      `INSERT OR REPLACE INTO marketplace_listings (listing_id_onchain, seller_address, token_address, property_id, amount, price_per_token_wei, listing_status, active, tx_hash)
        VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?)`
     ).run(
       parseInt(listingId),
@@ -261,7 +261,7 @@ async function indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, toBlock)
     const price = event.args[4].toString();
 
     db.prepare(
-      `INSERT OR IGNORE INTO nft_listings (listing_id_onchain, seller_address, nft_contract, nft_token_id, price_wei, active, tx_hash)
+      `INSERT OR REPLACE INTO nft_listings (listing_id_onchain, seller_address, nft_contract, nft_token_id, price_wei, active, tx_hash)
        VALUES (?, ?, ?, ?, ?, 1, ?)`
     ).run(
       parseInt(listingId),
@@ -282,6 +282,7 @@ async function indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, toBlock)
     const buyer = event.args[1];
     const tokenId = event.args[2].toString();
     const price = event.args[3].toString();
+    const tokenIdInt = parseInt(tokenId);
 
     db.prepare(
       `UPDATE nft_listings SET active = 0, buyer_address = ? WHERE listing_id_onchain = ?`
@@ -290,15 +291,22 @@ async function indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, toBlock)
     // Update NFT owner
     db.prepare(
       `UPDATE nfts SET owner_address = ? WHERE token_id = ?`
-    ).run(buyer.toLowerCase(), parseInt(tokenId));
+    ).run(buyer.toLowerCase(), tokenIdInt);
+
+    const nftRow = db.prepare(
+      `SELECT property_id FROM nfts WHERE token_id = ?`
+    ).get(tokenIdInt);
 
     db.prepare(
-      `INSERT OR IGNORE INTO transactions (id, type, from_address, to_address, total_amount_wei, tx_hash, block_number, status)
-       VALUES (?, 'listing_sold', ?, ?, ?, ?, ?, 'confirmed')`
+      `INSERT OR IGNORE INTO transactions (id, type, property_id, token_address, from_address, to_address, tokens, total_amount_wei, tx_hash, block_number, status)
+       VALUES (?, 'listing_sold', ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
     ).run(
       `tx-${event.transactionHash.slice(0, 16)}-nft`,
+      nftRow?.property_id || null,
+      `nft:${tokenIdInt}`,
       "nft_marketplace",
       buyer.toLowerCase(),
+      1,
       price,
       event.transactionHash,
       event.blockNumber

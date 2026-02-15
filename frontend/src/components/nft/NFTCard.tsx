@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { NFT, NFTListing } from '@/types';
 import { getAssetTypeLabel, formatValuationFromWei, shortenAddress } from '@/lib/utils';
+import { useETHPrice, formatWeiAsEUR } from '@/hooks/useETHPrice';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { MapPinIcon, HomeIcon, TagIcon } from '@heroicons/react/24/outline';
@@ -23,6 +24,8 @@ function getAssetTypeBadgeVariant(assetType: string): 'success' | 'info' | 'warn
 }
 
 export default function NFTCard({ nft, listing }: NFTCardProps) {
+  const { ethPrice } = useETHPrice();
+
   return (
     <Link href={`/nfts/${nft.tokenId}`}>
       <Card hover className="h-full flex flex-col p-5">
@@ -38,7 +41,7 @@ export default function NFTCard({ nft, listing }: NFTCardProps) {
         {listing && (
           <div className="flex items-center gap-1 mb-2 px-2 py-1 rounded-full bg-orange-50 border border-orange-300 text-orange-700 text-xs w-fit">
             <TagIcon className="h-3.5 w-3.5" />
-            <span>En vente — {formatEther(BigInt(listing.priceWei))} ETH</span>
+            <span>En vente — {formatEther(BigInt(listing.priceWei))} ETH (~{formatWeiAsEUR(listing.priceWei, ethPrice)})</span>
           </div>
         )}
 
@@ -62,6 +65,7 @@ export default function NFTCard({ nft, listing }: NFTCardProps) {
           <p className="text-xl font-bold text-gray-900">
             {formatValuationFromWei(nft.valuationWei)}
           </p>
+          <p className="text-xs text-gray-400">~{formatWeiAsEUR(nft.valuationWei, ethPrice)}</p>
         </div>
 
         {/* Owner */}

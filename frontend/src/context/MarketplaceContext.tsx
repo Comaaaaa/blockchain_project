@@ -71,8 +71,8 @@ function parseImages(imagesStr: string | null): string[] {
 
 function mapApiListing(l: any): MarketplaceListing {
   const images = parseImages(l.property_images);
-  const tokenPriceWei = l.token_price_wei ? BigInt(l.token_price_wei) : 0n;
-  const pricePerTokenWei = l.price_per_token_wei ? BigInt(l.price_per_token_wei) : 0n;
+  const tokenPriceWei = l.token_price_wei ? BigInt(l.token_price_wei) : BigInt(0);
+  const pricePerTokenWei = l.price_per_token_wei ? BigInt(l.price_per_token_wei) : BigInt(0);
   const amount = Number(l.amount || 0);
   const totalPriceWei = (pricePerTokenWei * BigInt(amount)).toString();
 

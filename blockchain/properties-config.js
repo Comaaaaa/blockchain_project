@@ -1,3 +1,14 @@
+// Taux de reference ETH/EUR utilise pour calculer les prix de tokens on-chain
+const ETH_EUR_RATE = 2500; // 1 ETH = 2 500 €
+
+// Calcule le prix d'un token en wei a partir du prix EUR du bien et du nombre de tokens
+function computeTokenPriceWei(priceEUR, totalTokens) {
+  const pricePerTokenEUR = priceEUR / totalTokens;
+  const pricePerTokenETH = pricePerTokenEUR / ETH_EUR_RATE;
+  // Arrondi au wei pres (18 decimales)
+  return BigInt(Math.round(pricePerTokenETH * 1e18)).toString();
+}
+
 const properties = [
   {
     id: "prop-001",
@@ -22,7 +33,7 @@ const properties = [
     token_symbol: "PAR7E",
     token_name: "Appartement Paris 7e",
     total_tokens: 1000,
-    token_price_wei: "1000000000000000", // 0.001 ETH
+    token_price_wei: computeTokenPriceWei(520000, 1000), // ~0.208 ETH → ~520 €
     annual_rent: 24000,
     annual_charges: 4800,
     net_yield: 3.69,
@@ -51,7 +62,7 @@ const properties = [
     token_symbol: "LYONC",
     token_name: "Loft Lyon Confluence",
     total_tokens: 760,
-    token_price_wei: "700000000000000", // 0.0007 ETH
+    token_price_wei: computeTokenPriceWei(380000, 760), // ~0.2 ETH → ~500 €
     annual_rent: 18000,
     annual_charges: 3600,
     net_yield: 3.79,
@@ -80,7 +91,7 @@ const properties = [
     token_symbol: "NICEV",
     token_name: "Villa Nice Vue Mer",
     total_tokens: 1780,
-    token_price_wei: "800000000000000", // 0.0008 ETH
+    token_price_wei: computeTokenPriceWei(890000, 1780), // ~0.2 ETH → ~500 €
     annual_rent: 48000,
     annual_charges: 9600,
     net_yield: 4.31,
@@ -109,7 +120,7 @@ const properties = [
     token_symbol: "BDXCH",
     token_name: "Commercial Bordeaux Chartrons",
     total_tokens: 620,
-    token_price_wei: "750000000000000",
+    token_price_wei: computeTokenPriceWei(310000, 620), // ~0.2 ETH → ~500 €
     annual_rent: 21000,
     annual_charges: 4200,
     net_yield: 5.42,
@@ -138,7 +149,7 @@ const properties = [
     token_symbol: "PAR16",
     token_name: "Penthouse Paris 16e",
     total_tokens: 2500,
-    token_price_wei: "900000000000000",
+    token_price_wei: computeTokenPriceWei(1250000, 2500), // ~0.2 ETH → ~500 €
     annual_rent: 60000,
     annual_charges: 12000,
     net_yield: 3.84,
@@ -167,7 +178,7 @@ const properties = [
     token_symbol: "TLSCT",
     token_name: "Maison Toulouse Centre",
     total_tokens: 840,
-    token_price_wei: "750000000000000",
+    token_price_wei: computeTokenPriceWei(420000, 840), // ~0.2 ETH → ~500 €
     annual_rent: 22800,
     annual_charges: 4560,
     net_yield: 4.34,
@@ -176,4 +187,4 @@ const properties = [
   },
 ];
 
-module.exports = { properties };
+module.exports = { properties, ETH_EUR_RATE };

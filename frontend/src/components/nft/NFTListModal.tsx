@@ -6,6 +6,8 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { NFT } from '@/types';
+import { useETHPrice, weiToEUR } from '@/hooks/useETHPrice';
+import { formatCurrency } from '@/lib/utils';
 import { useReadContract, useWriteContract } from 'wagmi';
 import { parseEther } from 'viem';
 
@@ -18,6 +20,7 @@ interface NFTListModalProps {
 
 export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTListModalProps) {
   const { writeContractAsync } = useWriteContract();
+  const { ethPrice } = useETHPrice();
   const addresses = getContractAddresses();
   const marketplaceAddr = addresses.NFTMarketplace as `0x${string}`;
 
@@ -133,7 +136,10 @@ export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTLis
           <div className="bg-orange-50 rounded-lg p-3 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Prix total</span>
-              <span className="font-bold text-orange">{priceETH} ETH</span>
+              <span className="text-right">
+                <span className="font-bold text-orange">{priceETH} ETH</span>
+                <span className="block text-xs text-gray-500">~{formatCurrency(Math.round(numericPrice * ethPrice))}</span>
+              </span>
             </div>
             <div className="flex justify-between text-xs text-gray-500 mt-1">
               <span>Frais marketplace ({feePercentLabel}%)</span>

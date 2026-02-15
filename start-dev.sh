@@ -30,6 +30,7 @@ if [ -f "$PROJECT_ROOT/blockchain/deployed-addresses.json" ]; then
   TOKEN=$(echo "$ADDRESSES" | grep -o '"PropertyToken_PAR7E": "[^"]*"' | cut -d'"' -f4)
   NFT=$(echo "$ADDRESSES" | grep -o '"PropertyNFT": "[^"]*"' | cut -d'"' -f4)
   MARKETPLACE=$(echo "$ADDRESSES" | grep -o '"PropertyMarketplace": "[^"]*"' | cut -d'"' -f4)
+  NFT_MARKETPLACE=$(echo "$ADDRESSES" | grep -o '"NFTMarketplace": "[^"]*"' | cut -d'"' -f4)
   SWAP=$(echo "$ADDRESSES" | grep -o '"TokenSwapPool": "[^"]*"' | cut -d'"' -f4)
 
   # Update frontend .env.local
@@ -38,10 +39,24 @@ if [ -f "$PROJECT_ROOT/blockchain/deployed-addresses.json" ]; then
   sed -i "s|NEXT_PUBLIC_PROPERTY_TOKEN=.*|NEXT_PUBLIC_PROPERTY_TOKEN=$TOKEN|" "$PROJECT_ROOT/frontend/.env.local"
   sed -i "s|NEXT_PUBLIC_PROPERTY_NFT=.*|NEXT_PUBLIC_PROPERTY_NFT=$NFT|" "$PROJECT_ROOT/frontend/.env.local"
   sed -i "s|NEXT_PUBLIC_PROPERTY_MARKETPLACE=.*|NEXT_PUBLIC_PROPERTY_MARKETPLACE=$MARKETPLACE|" "$PROJECT_ROOT/frontend/.env.local"
+  sed -i "s|NEXT_PUBLIC_NFT_MARKETPLACE=.*|NEXT_PUBLIC_NFT_MARKETPLACE=$NFT_MARKETPLACE|" "$PROJECT_ROOT/frontend/.env.local"
   sed -i "s|NEXT_PUBLIC_TOKEN_SWAP_POOL=.*|NEXT_PUBLIC_TOKEN_SWAP_POOL=$SWAP|" "$PROJECT_ROOT/frontend/.env.local"
 
   echo "  Contract addresses written to frontend/.env.local"
 fi
+
+# 3b. Reset indexer & stale listings (fresh Hardhat node = block 0, IDs restart)
+echo "  Resetting indexer and stale on-chain data..."
+cd "$PROJECT_ROOT/backend"
+node -e "
+const { getDb } = require('./src/db/database');
+const db = getDb();
+db.prepare(\"UPDATE indexer_state SET value = '0' WHERE key = 'last_block'\").run();
+db.prepare('DELETE FROM marketplace_listings').run();
+db.prepare('DELETE FROM nft_listings').run();
+db.prepare(\"DELETE FROM transactions WHERE type IN ('purchase','listing_sold','swap')\").run();
+console.log('  Indexer reset, stale listings cleared');
+"
 
 # 4. Seed database & start backend
 echo "[4/5] Seeding database & starting backend..."

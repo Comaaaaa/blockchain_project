@@ -13,17 +13,18 @@ interface ListingCardProps {
   onBuy?: (listing: MarketplaceListing) => void;
   onCancel?: (listing: MarketplaceListing) => void;
   isOwner?: boolean;
+  isCancelling?: boolean;
 }
 
-export default function ListingCard({ listing, onBuy, onCancel, isOwner }: ListingCardProps) {
+export default function ListingCard({ listing, onBuy, onCancel, isOwner, isCancelling = false }: ListingCardProps) {
   const initialPriceWei = BigInt(listing.property.tokenInfo.tokenPriceWei || 0);
   const listingPriceWei = BigInt(listing.pricePerTokenWei || 0);
   const priceDiffWei = listingPriceWei - initialPriceWei;
   const priceDiffPercent =
-    initialPriceWei > 0n
-      ? Number((priceDiffWei * 10_000n) / initialPriceWei) / 100
+    initialPriceWei > BigInt(0)
+      ? Number((priceDiffWei * BigInt(10000)) / initialPriceWei) / 100
       : 0;
-  const hasImage = listing.property.images.length > 0;
+  const imageSrc = listing.property.images.find((img) => typeof img === 'string' && img.trim().length > 0);
 
   const statusVariant = listing.status === 'active' ? 'success' : listing.status === 'sold' ? 'default' : 'default';
   const statusLabel = listing.status === 'active' ? 'Actif' : listing.status === 'sold' ? 'Vendu' : 'Annule';
@@ -33,9 +34,9 @@ export default function ListingCard({ listing, onBuy, onCancel, isOwner }: Listi
       <div className="flex gap-4">
         <Link href={`/properties/${listing.propertyId}`} className="shrink-0">
           <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-200">
-            {hasImage ? (
+            {imageSrc ? (
               <Image
-                src={listing.property.images[0]}
+                src={imageSrc}
                 alt={listing.property.title}
                 fill
                 className="object-cover"
@@ -88,7 +89,7 @@ export default function ListingCard({ listing, onBuy, onCancel, isOwner }: Listi
 
             <div className="flex gap-2">
               {listing.status === 'active' && isOwner && onCancel && (
-                <Button size="sm" variant="outline" onClick={() => onCancel(listing)}>
+                <Button size="sm" variant="outline" onClick={() => onCancel(listing)} loading={isCancelling} disabled={isCancelling}>
                   Annuler
                 </Button>
               )}
@@ -100,9 +101,9 @@ export default function ListingCard({ listing, onBuy, onCancel, isOwner }: Listi
             </div>
           </div>
 
-          {initialPriceWei > 0n && listing.status === 'active' && (
-            <p className={`text-xs mt-1 ${priceDiffWei >= 0n ? 'text-red-500' : 'text-green-600'}`}>
-              {priceDiffWei >= 0n ? '+' : ''}{priceDiffPercent.toFixed(1)}% vs prix initial
+          {initialPriceWei > BigInt(0) && listing.status === 'active' && (
+            <p className={`text-xs mt-1 ${priceDiffWei >= BigInt(0) ? 'text-red-500' : 'text-green-600'}`}>
+              {priceDiffWei >= BigInt(0) ? '+' : ''}{priceDiffPercent.toFixed(1)}% vs prix initial
             </p>
           )}
         </div>

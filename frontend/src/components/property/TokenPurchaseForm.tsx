@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Property } from '@/types';
 import { formatETH } from '@/lib/utils';
+import { useETHPrice, formatWeiAsEUR } from '@/hooks/useETHPrice';
 import { PropertyTokenABI, ComplianceRegistryABI, getContractAddresses } from '@/lib/contracts';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useTransactionContext } from '@/context/TransactionContext';
@@ -17,6 +18,7 @@ interface TokenPurchaseFormProps {
 }
 
 export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) {
+  const { ethPrice } = useETHPrice();
   const [tokens, setTokens] = useState(1);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -217,7 +219,10 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         <div className="bg-gray-50 rounded-lg p-4 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Prix par token</span>
-            <span className="font-medium">{formatETH(tokenPriceWei)}</span>
+            <span className="text-right">
+              <span className="font-medium">{formatETH(tokenPriceWei)}</span>
+              <span className="block text-xs text-gray-400">~{formatWeiAsEUR(tokenPriceWei, ethPrice)}</span>
+            </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Quantite</span>
@@ -225,7 +230,10 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
           </div>
           <div className="border-t border-gray-200 pt-2 flex justify-between">
             <span className="font-semibold text-gray-900">Total</span>
-            <span className="font-bold text-xl text-orange">{formatETH(totalCostWei)}</span>
+            <span className="text-right">
+              <span className="font-bold text-xl text-orange">{formatETH(totalCostWei)}</span>
+              <span className="block text-xs text-gray-400">~{formatWeiAsEUR(totalCostWei, ethPrice)}</span>
+            </span>
           </div>
         </div>
 

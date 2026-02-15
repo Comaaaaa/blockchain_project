@@ -8,9 +8,10 @@ interface ListingGridProps {
   onBuy?: (listing: MarketplaceListing) => void;
   onCancel?: (listing: MarketplaceListing) => void;
   currentAddress?: string;
+  cancellingListingId?: string | null;
 }
 
-export default function ListingGrid({ listings, onBuy, onCancel, currentAddress }: ListingGridProps) {
+export default function ListingGrid({ listings, onBuy, onCancel, currentAddress, cancellingListingId }: ListingGridProps) {
   if (listings.length === 0) {
     return (
       <div className="text-center py-12">
@@ -33,6 +34,7 @@ export default function ListingGrid({ listings, onBuy, onCancel, currentAddress 
             onBuy={onBuy}
             onCancel={onCancel}
             isOwner={isOwner}
+            isCancelling={cancellingListingId === listing.id}
           />
         );
       })}

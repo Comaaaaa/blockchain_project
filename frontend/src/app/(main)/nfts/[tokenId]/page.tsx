@@ -16,6 +16,7 @@ import {
   shortenAddress,
   formatDateTime,
 } from '@/lib/utils';
+import { useETHPrice, formatWeiAsEUR } from '@/hooks/useETHPrice';
 import {
   ArrowLeftIcon,
   MapPinIcon,
@@ -30,6 +31,7 @@ import { formatEther } from 'viem';
 export default function NFTDetailPage({ params }: { params: Promise<{ tokenId: string }> }) {
   const { tokenId } = use(params);
   const { address } = useAccount();
+  const { ethPrice } = useETHPrice();
   const { writeContractAsync } = useWriteContract();
   const addresses = getContractAddresses();
 
@@ -181,6 +183,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ tokenId: s
                 <p className="text-2xl font-bold text-orange">
                   {formatValuationFromWei(nft.valuationWei)}
                 </p>
+                <p className="text-sm text-gray-400">~{formatWeiAsEUR(nft.valuationWei, ethPrice)}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Date de mint</p>
@@ -295,6 +298,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ tokenId: s
                   <p className="text-xl font-bold text-orange">
                     {formatEther(BigInt(listing.priceWei))} ETH
                   </p>
+                  <p className="text-xs text-gray-500">~{formatWeiAsEUR(listing.priceWei, ethPrice)}</p>
                 </div>
                 <Button
                   variant="outline"
@@ -314,6 +318,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ tokenId: s
                   <p className="text-xl font-bold text-orange">
                     {formatEther(BigInt(listing.priceWei))} ETH
                   </p>
+                  <p className="text-xs text-gray-500">~{formatWeiAsEUR(listing.priceWei, ethPrice)}</p>
                 </div>
                 <NFTBuyButton listing={listing} onSuccess={fetchData} />
               </div>

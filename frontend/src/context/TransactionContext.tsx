@@ -42,14 +42,20 @@ function transactionReducer(state: TransactionState, action: TransactionAction):
 }
 
 function mapApiTransaction(t: any): Transaction {
+  const fromAddress = (t.from_address || '').toLowerCase();
+  const isNftMarketplacePurchase = fromAddress === 'nft_marketplace' && t.type === 'listing_sold';
+  const mappedType = t.type === 'listing_sold' ? 'purchase' : t.type;
+  const rawTokens = Number(t.tokens || 0);
+  const mappedTokens = isNftMarketplacePurchase && rawTokens === 0 ? 1 : rawTokens;
+
   return {
     id: t.id,
-    type: t.type === 'listing_sold' ? 'purchase' : t.type,
-    propertyId: t.property_id || '',
-    propertyTitle: t.property_title || '',
+    type: mappedType,
+    propertyId: t.property_id || (isNftMarketplacePurchase ? `nft-${t.tx_hash || t.id}` : ''),
+    propertyTitle: t.property_title || (isNftMarketplacePurchase ? 'NFT TokenImmo (Marketplace)' : ''),
     from: t.from_address || '',
     to: t.to_address || '',
-    tokens: t.tokens || 0,
+    tokens: mappedTokens,
     pricePerToken: 0,
     totalAmount: t.total_amount_wei ? Number(formatEther(BigInt(t.total_amount_wei))) : 0,
     totalAmountWei: t.total_amount_wei ? String(t.total_amount_wei) : undefined,
