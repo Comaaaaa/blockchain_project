@@ -67,6 +67,7 @@ export interface Transaction {
   from: string;
   to: string;
   tokens: number;
+  swapDirection?: 'eth_to_token' | 'token_to_eth';
   pricePerToken: number;
   totalAmount: number;
   totalAmountWei?: string;

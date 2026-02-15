@@ -269,10 +269,23 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             String(tx.from_address || '').toLowerCase() === 'nft_marketplace'
             && tx.type === 'listing_sold';
           const isSwap = tx.type === 'swap';
+          const rawSwapDirection = String(tx.swap_direction || tx.direction || '').toLowerCase();
           const swapTitle = String(tx.property_title || '');
-          const isSwapSell = isSwap && swapTitle.includes('PAR7E → ETH');
 
           const baseTokens = Number(tx.tokens || (isNftPurchase ? 1 : 0));
+          const inferredSwapDirection: 'eth_to_token' | 'token_to_eth' | undefined =
+            rawSwapDirection === 'eth_to_token' || rawSwapDirection === 'token_to_eth'
+              ? (rawSwapDirection as 'eth_to_token' | 'token_to_eth')
+              : baseTokens < 0
+                ? 'token_to_eth'
+                : baseTokens > 0
+                  ? 'eth_to_token'
+                  : swapTitle.includes('PAR7E → ETH')
+                    ? 'token_to_eth'
+                    : swapTitle.includes('ETH → PAR7E')
+                      ? 'eth_to_token'
+                      : undefined;
+          const isSwapSell = isSwap && inferredSwapDirection === 'token_to_eth';
           const tokens = isSwap
             ? (isSwapSell ? -Math.abs(baseTokens) : Math.abs(baseTokens))
             : baseTokens;
@@ -301,14 +314,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             ? weiToEUR(BigInt(tx.total_amount_wei), ethPrice)
             : 0;
 
-          const nextTokens = existing.tokens + tokens;
-          if (nextTokens <= 0) {
-            aggregate.delete(propertyId);
-            continue;
-          }
-
           aggregate.set(propertyId, {
-            tokens: nextTokens,
+            tokens: existing.tokens + tokens,
             totalInvestedEUR: existing.totalInvestedEUR + (isSwapSell ? -investedEUR : investedEUR),
             purchaseDate:
               new Date(tx.created_at || 0).getTime() > new Date(existing.purchaseDate).getTime()

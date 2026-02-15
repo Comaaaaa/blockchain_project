@@ -39,7 +39,7 @@ router.get("/", (req, res) => {
 // POST /api/transactions — Record a new transaction
 router.post("/", (req, res) => {
   const db = getDb();
-  const { id, type, property_id, token_address, from_address, to_address, tokens, price_per_token_wei, total_amount_wei, tx_hash, block_number, status } = req.body;
+  const { id, type, property_id, token_address, from_address, to_address, tokens, swap_direction, price_per_token_wei, total_amount_wei, tx_hash, block_number, status } = req.body;
 
   if (!tx_hash) {
     return res.status(400).json({ error: "tx_hash is required" });
@@ -47,8 +47,8 @@ router.post("/", (req, res) => {
 
   try {
     const result = db.prepare(
-      `INSERT OR IGNORE INTO transactions (id, type, property_id, token_address, from_address, to_address, tokens, price_per_token_wei, total_amount_wei, tx_hash, block_number, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR IGNORE INTO transactions (id, type, property_id, token_address, from_address, to_address, tokens, swap_direction, price_per_token_wei, total_amount_wei, tx_hash, block_number, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id || `tx-${tx_hash.slice(0, 16)}`,
       type || "purchase",
@@ -57,6 +57,7 @@ router.post("/", (req, res) => {
       from_address ? from_address.toLowerCase() : null,
       to_address ? to_address.toLowerCase() : null,
       tokens || 0,
+      swap_direction || null,
       price_per_token_wei || null,
       total_amount_wei || null,
       tx_hash,
