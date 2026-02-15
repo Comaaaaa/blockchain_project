@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import { Transaction } from '@/types';
 import { api } from '@/lib/api';
+import { formatEther } from 'viem';
 
 interface TransactionState {
   transactions: Transaction[];
@@ -50,7 +51,8 @@ function mapApiTransaction(t: any): Transaction {
     to: t.to_address || '',
     tokens: t.tokens || 0,
     pricePerToken: 0,
-    totalAmount: parseFloat(t.total_amount_wei) || 0,
+    totalAmount: t.total_amount_wei ? Number(formatEther(BigInt(t.total_amount_wei))) : 0,
+    totalAmountWei: t.total_amount_wei ? String(t.total_amount_wei) : undefined,
     txHash: t.tx_hash || '',
     status: t.status || 'confirmed',
     createdAt: t.created_at || new Date().toISOString(),
@@ -70,7 +72,7 @@ async function saveTransactionToBackend(tx: Transaction) {
       from_address: tx.from,
       to_address: tx.to,
       tokens: tx.tokens,
-      total_amount_wei: String(tx.totalAmount),
+      total_amount_wei: tx.totalAmountWei || String(tx.totalAmount),
       tx_hash: tx.txHash,
       status: tx.status,
     });

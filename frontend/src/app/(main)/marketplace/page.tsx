@@ -14,14 +14,13 @@ import { MarketplaceListing } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { useAccount, useWriteContract } from 'wagmi';
+import { formatEther } from 'viem';
 
 export default function MarketplacePage() {
   const { state, activeListings, dispatch: marketplaceDispatch, refetch } = useMarketplaceContext();
   const { dispatch: portfolioDispatch } = usePortfolioContext();
   const { addTransaction } = useTransactionContext();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [buying, setBuying] = useState<string | null>(null);
-  const [cancelling, setCancelling] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('active');
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -30,8 +29,7 @@ export default function MarketplacePage() {
   const myListings = state.listings.filter(
     (l) => address && l.sellerAddress.toLowerCase() === address.toLowerCase()
   );
-  const myActiveListings = myListings.filter((l) => l.status === 'active');
-  const soldListings = state.listings.filter((l) => l.status === 'sold');
+  const soldListings = state.listings.filter((l) => l.status === 'sold' || l.status === 'cancelled');
 
   const tabs = [
     { id: 'active', label: 'Offres actives', count: activeListings.length },
@@ -48,10 +46,10 @@ export default function MarketplacePage() {
 
   const handleBuy = async (listing: MarketplaceListing) => {
     if (!isConnected || !address) return;
-    setBuying(listing.id);
 
     try {
-      const totalPrice = BigInt(listing.tokensForSale) * BigInt(listing.pricePerToken);
+      const pricePerTokenWei = listing.pricePerTokenWei || '0';
+      const totalPrice = BigInt(listing.tokensForSale) * BigInt(pricePerTokenWei);
 
       const hash = await writeContractAsync({
         address: addresses.PropertyMarketplace as `0x${string}`,
@@ -71,7 +69,7 @@ export default function MarketplacePage() {
         payload: {
           propertyId: listing.propertyId,
           tokens: listing.tokensForSale,
-          pricePerToken: listing.pricePerToken,
+          pricePerToken: Number(formatEther(BigInt(pricePerTokenWei))),
         },
       });
 
@@ -83,8 +81,9 @@ export default function MarketplacePage() {
         from: listing.sellerAddress,
         to: address,
         tokens: listing.tokensForSale,
-        pricePerToken: listing.pricePerToken,
-        totalAmount: Number(totalPrice),
+        pricePerToken: Number(formatEther(BigInt(pricePerTokenWei))),
+        totalAmount: Number(formatEther(totalPrice)),
+        totalAmountWei: totalPrice.toString(),
         txHash: hash,
         status: 'confirmed',
         createdAt: new Date().toISOString(),
@@ -93,14 +92,11 @@ export default function MarketplacePage() {
       setTimeout(() => refetch(), 5000);
     } catch (error: any) {
       console.error('Buy failed:', error?.shortMessage || error?.message);
-    } finally {
-      setBuying(null);
     }
   };
 
   const handleCancel = async (listing: MarketplaceListing) => {
     if (!isConnected || !address) return;
-    setCancelling(listing.id);
 
     try {
       await writeContractAsync({
@@ -118,8 +114,6 @@ export default function MarketplacePage() {
       setTimeout(() => refetch(), 5000);
     } catch (error: any) {
       console.error('Cancel failed:', error?.shortMessage || error?.message);
-    } finally {
-      setCancelling(null);
     }
   };
 

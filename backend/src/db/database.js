@@ -85,6 +85,7 @@ function initTables() {
       property_id TEXT,
       amount INTEGER,
       price_per_token_wei TEXT,
+      listing_status TEXT DEFAULT 'active',
       active INTEGER DEFAULT 1,
       tx_hash TEXT,
       created_at TEXT DEFAULT (datetime('now')),
@@ -111,6 +112,13 @@ function initTables() {
   // Migration: add tokens_sold column to existing databases
   try {
     db.exec(`ALTER TABLE properties ADD COLUMN tokens_sold INTEGER DEFAULT 0`);
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  // Migration: add listing_status column to existing marketplace_listings table
+  try {
+    db.exec(`ALTER TABLE marketplace_listings ADD COLUMN listing_status TEXT DEFAULT 'active'`);
   } catch (e) {
     // Column already exists, ignore
   }

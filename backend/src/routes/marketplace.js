@@ -14,7 +14,8 @@ router.get("/listings", (req, res) => {
               p.id as prop_id, p.title as property_title, p.city, p.type as property_type,
               p.images as property_images, p.token_symbol, p.token_price_wei,
               p.total_tokens, p.tokens_sold, p.price as property_price,
-              p.net_yield, p.surface
+              p.net_yield, p.surface,
+              ml.listing_status
        FROM marketplace_listings ml
        LEFT JOIN properties p ON ml.property_id = p.id
        WHERE ml.active = 1
@@ -33,7 +34,8 @@ router.get("/listings/all", (req, res) => {
               p.id as prop_id, p.title as property_title, p.city, p.type as property_type,
               p.images as property_images, p.token_symbol, p.token_price_wei,
               p.total_tokens, p.tokens_sold, p.price as property_price,
-              p.net_yield, p.surface
+              p.net_yield, p.surface,
+              ml.listing_status
        FROM marketplace_listings ml
        LEFT JOIN properties p ON ml.property_id = p.id
        ORDER BY ml.created_at DESC`
@@ -51,7 +53,8 @@ router.get("/listings/seller/:address", (req, res) => {
               p.id as prop_id, p.title as property_title, p.city, p.type as property_type,
               p.images as property_images, p.token_symbol, p.token_price_wei,
               p.total_tokens, p.tokens_sold, p.price as property_price,
-              p.net_yield, p.surface
+              p.net_yield, p.surface,
+              ml.listing_status
        FROM marketplace_listings ml
        LEFT JOIN properties p ON ml.property_id = p.id
        WHERE LOWER(ml.seller_address) = ?

@@ -276,7 +276,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               <div className="flex justify-between">
                 <span className="text-gray-500">Prix par token</span>
                 <span className="font-bold text-xl text-orange">
-                  {formatETH(property.tokenInfo.tokenPrice)}
+                  {formatETH(property.tokenInfo.tokenPriceWei || 0)}
                 </span>
               </div>
               <div className="flex justify-between">

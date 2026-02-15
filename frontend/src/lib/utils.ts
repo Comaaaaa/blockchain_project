@@ -1,4 +1,5 @@
 import clsx, { ClassValue } from 'clsx';
+import { formatEther } from 'viem';
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
@@ -18,10 +19,27 @@ export function formatNumber(num: number): string {
 }
 
 export function formatETH(wei: string | number | bigint): string {
-  const value = Number(BigInt(wei)) / 1e18;
-  if (value < 0.0001) return `${(value * 1e6).toFixed(2)} μETH`;
-  if (value < 1) return `${value.toFixed(4)} ETH`;
-  return `${value.toFixed(4)} ETH`;
+  const weiBig = BigInt(wei);
+  const WEI_PER_ETH = 10n ** 18n;
+  const WEI_PER_MICRO_ETH = 10n ** 12n;
+  const POINT0001_ETH_WEI = WEI_PER_ETH / 10_000n;
+
+  const toFixedScaled = (scaledValue: bigint, decimals: number): string => {
+    const negative = scaledValue < 0n;
+    let s = (negative ? -scaledValue : scaledValue).toString();
+    while (s.length <= decimals) s = `0${s}`;
+    const integerPart = s.slice(0, s.length - decimals);
+    const fractionalPart = s.slice(s.length - decimals);
+    return `${negative ? '-' : ''}${integerPart}${decimals > 0 ? `.${fractionalPart}` : ''}`;
+  };
+
+  if (weiBig < POINT0001_ETH_WEI) {
+    const microEthScaled = (weiBig * 100n) / WEI_PER_MICRO_ETH;
+    return `${toFixedScaled(microEthScaled, 2)} μETH`;
+  }
+
+  const ethScaled = (weiBig * 10_000n) / WEI_PER_ETH;
+  return `${toFixedScaled(ethScaled, 4)} ETH`;
 }
 
 export function formatPercent(value: number): string {
@@ -123,7 +141,7 @@ export function getAssetTypeLabel(assetType: string): string {
 }
 
 export function formatValuationFromWei(valuationWei: string): string {
-  const wei = BigInt(valuationWei);
-  const eth = Number(wei) / 1e18;
-  return `${eth.toFixed(4)} ETH`;
+  const eth = formatEther(BigInt(valuationWei));
+  const [intPart, fracPart = ''] = eth.split('.');
+  return `${intPart}.${fracPart.padEnd(4, '0').slice(0, 4)} ETH`;
 }

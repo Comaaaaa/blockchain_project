@@ -10,7 +10,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { useAccount, useWriteContract } from 'wagmi';
-import { parseEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 
 interface CreateListingModalProps {
   isOpen: boolean;
@@ -20,7 +20,7 @@ interface CreateListingModalProps {
 export default function CreateListingModal({ isOpen, onClose }: CreateListingModalProps) {
   const { state: portfolioState } = usePortfolioContext();
   const { refetch } = useMarketplaceContext();
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const addresses = getContractAddresses();
 
@@ -112,12 +112,20 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
           onChange={(e) => {
             setSelectedProperty(e.target.value);
             const h = portfolioState.holdings.find((h) => h.propertyId === e.target.value);
-            if (h && h.property.tokenInfo.tokenPrice > 0) {
-              // Suggest initial token price in ETH (slightly above initial)
-              // tokenPrice is stored in wei, convert to ETH with toFixed to avoid scientific notation
-              const suggestedWei = Math.floor(h.property.tokenInfo.tokenPrice * 1.05);
-              const suggestedETH = suggestedWei / 1e18;
-              setPricePerTokenETH(suggestedETH.toFixed(6));
+            if (h) {
+              let baseWei = 0n;
+              if (h.property.tokenInfo.tokenPriceWei) {
+                baseWei = BigInt(h.property.tokenInfo.tokenPriceWei);
+              } else if (h.property.tokenInfo.tokenPrice > 0) {
+                baseWei = parseEther(String(h.property.tokenInfo.tokenPrice));
+              }
+
+              if (baseWei > 0n) {
+                const suggestedWei = (baseWei * 105n) / 100n;
+                const suggestedEth = formatEther(suggestedWei);
+                const [intPart, fracPart = ''] = suggestedEth.split('.');
+                setPricePerTokenETH(`${intPart}.${fracPart.slice(0, 6)}`.replace(/\.$/, ''));
+              }
             }
           }}
         />
@@ -142,10 +150,10 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
             />
 
             <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
-              {holding.property.tokenInfo.tokenPrice > 0 && (
+              {(holding.property.tokenInfo.tokenPriceWei || holding.property.tokenInfo.tokenPrice > 0) && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Prix initial du token</span>
-                  <span>{formatETH(holding.property.tokenInfo.tokenPrice)}</span>
+                  <span>{formatETH(holding.property.tokenInfo.tokenPriceWei || 0)}</span>
                 </div>
               )}
               <div className="flex justify-between">

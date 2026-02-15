@@ -16,9 +16,13 @@ interface ListingCardProps {
 }
 
 export default function ListingCard({ listing, onBuy, onCancel, isOwner }: ListingCardProps) {
-  const initialPrice = listing.property.tokenInfo.tokenPrice;
-  const priceDiff = initialPrice > 0 ? listing.pricePerToken - initialPrice : 0;
-  const priceDiffPercent = initialPrice > 0 ? (priceDiff / initialPrice) * 100 : 0;
+  const initialPriceWei = BigInt(listing.property.tokenInfo.tokenPriceWei || 0);
+  const listingPriceWei = BigInt(listing.pricePerTokenWei || 0);
+  const priceDiffWei = listingPriceWei - initialPriceWei;
+  const priceDiffPercent =
+    initialPriceWei > 0n
+      ? Number((priceDiffWei * 10_000n) / initialPriceWei) / 100
+      : 0;
   const hasImage = listing.property.images.length > 0;
 
   const statusVariant = listing.status === 'active' ? 'success' : listing.status === 'sold' ? 'default' : 'default';
@@ -74,11 +78,11 @@ export default function ListingCard({ listing, onBuy, onCancel, isOwner }: Listi
               </div>
               <div>
                 <p className="text-xs text-gray-500">Prix/token</p>
-                <p className="font-semibold text-orange">{formatETH(listing.pricePerToken)}</p>
+                <p className="font-semibold text-orange">{formatETH(listing.pricePerTokenWei || 0)}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Total</p>
-                <p className="font-semibold">{formatETH(listing.totalPrice)}</p>
+                <p className="font-semibold">{formatETH(listing.totalPriceWei || 0)}</p>
               </div>
             </div>
 
@@ -96,9 +100,9 @@ export default function ListingCard({ listing, onBuy, onCancel, isOwner }: Listi
             </div>
           </div>
 
-          {initialPrice > 0 && listing.status === 'active' && (
-            <p className={`text-xs mt-1 ${priceDiff >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-              {priceDiff >= 0 ? '+' : ''}{priceDiffPercent.toFixed(1)}% vs prix initial
+          {initialPriceWei > 0n && listing.status === 'active' && (
+            <p className={`text-xs mt-1 ${priceDiffWei >= 0n ? 'text-red-500' : 'text-green-600'}`}>
+              {priceDiffWei >= 0n ? '+' : ''}{priceDiffPercent.toFixed(1)}% vs prix initial
             </p>
           )}
         </div>

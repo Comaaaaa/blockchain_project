@@ -129,6 +129,9 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
   // Listing created
   const createdFilter = marketplace.filters.ListingCreated();
   const createdEvents = await marketplace.queryFilter(createdFilter, fromBlock, toBlock);
+  const propertyByTokenStmt = db.prepare(
+    `SELECT id FROM properties WHERE LOWER(token_address) = ?`
+  );
 
   for (const event of createdEvents) {
     const listingId = event.args[0].toString();
@@ -138,14 +141,12 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
     const pricePerToken = event.args[4].toString();
 
     // Resolve token_address to property_id
-    const property = db.prepare(
-      `SELECT id FROM properties WHERE LOWER(token_address) = ?`
-    ).get(tokenAddress.toLowerCase());
+    const property = propertyByTokenStmt.get(tokenAddress.toLowerCase());
     const propertyId = property ? property.id : null;
 
     db.prepare(
-      `INSERT OR IGNORE INTO marketplace_listings (listing_id_onchain, seller_address, token_address, property_id, amount, price_per_token_wei, active, tx_hash)
-       VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
+      `INSERT OR IGNORE INTO marketplace_listings (listing_id_onchain, seller_address, token_address, property_id, amount, price_per_token_wei, listing_status, active, tx_hash)
+       VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?)`
     ).run(
       parseInt(listingId),
       seller.toLowerCase(),
@@ -168,7 +169,7 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
     const totalPrice = event.args[3].toString();
 
     db.prepare(
-      `UPDATE marketplace_listings SET active = 0 WHERE listing_id_onchain = ?`
+      `UPDATE marketplace_listings SET active = 0, listing_status = 'sold' WHERE listing_id_onchain = ?`
     ).run(parseInt(listingId));
 
     db.prepare(
@@ -192,7 +193,7 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
   for (const event of cancelledEvents) {
     const listingId = event.args[0].toString();
     db.prepare(
-      `UPDATE marketplace_listings SET active = 0 WHERE listing_id_onchain = ?`
+      `UPDATE marketplace_listings SET active = 0, listing_status = 'cancelled' WHERE listing_id_onchain = ?`
     ).run(parseInt(listingId));
   }
 

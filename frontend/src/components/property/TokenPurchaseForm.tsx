@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Property } from '@/types';
-import { formatCurrency, formatETH } from '@/lib/utils';
+import { formatETH } from '@/lib/utils';
 import { PropertyTokenABI, ComplianceRegistryABI, getContractAddresses } from '@/lib/contracts';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useTransactionContext } from '@/context/TransactionContext';
@@ -10,7 +10,7 @@ import { usePropertyContext } from '@/context/PropertyContext';
 import Button from '@/components/ui/Button';
 import { v4 as uuidv4 } from 'uuid';
 import { useAccount, useWriteContract, useReadContract } from 'wagmi';
-import { parseEther } from 'viem';
+import { formatEther } from 'viem';
 
 interface TokenPurchaseFormProps {
   property: Property;
@@ -36,7 +36,8 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
     query: { enabled: !!address },
   });
 
-  const totalCost = tokens * property.tokenInfo.tokenPrice;
+  const tokenPriceWei = property.tokenInfo.tokenPriceWei || '0';
+  const totalCostWei = BigInt(tokenPriceWei) * BigInt(tokens);
   const maxTokens = property.tokenInfo.availableTokens;
   const tokenAddress = property.tokenInfo.contractAddress;
 
@@ -61,13 +62,12 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
 
       // Call buyTokens on the PropertyToken contract
       // tokenPrice is in wei — send exact cost
-      const cost = BigInt(property.tokenInfo.tokenPrice) * BigInt(tokens);
       const hash = await writeContractAsync({
         address: tokenAddress as `0x${string}`,
         abi: PropertyTokenABI,
         functionName: 'buyTokens',
         args: [BigInt(tokens)],
-        value: cost,
+        value: totalCostWei,
         gas: BigInt(300000),
       });
 
@@ -80,8 +80,9 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         from: '0x0000000000000000000000000000000000000000',
         to: address,
         tokens,
-        pricePerToken: property.tokenInfo.tokenPrice,
-        totalAmount: totalCost,
+        pricePerToken: Number(formatEther(BigInt(tokenPriceWei))),
+        totalAmount: Number(formatEther(totalCostWei)),
+        totalAmountWei: totalCostWei.toString(),
         txHash: hash,
         status: 'confirmed',
         createdAt: new Date().toISOString(),
@@ -92,7 +93,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         payload: {
           propertyId: property.id,
           tokens,
-          pricePerToken: property.tokenInfo.tokenPrice,
+          pricePerToken: Number(formatEther(BigInt(tokenPriceWei))),
           property,
         },
       });
@@ -210,7 +211,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         <div className="bg-gray-50 rounded-lg p-4 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Prix par token</span>
-            <span className="font-medium">{formatETH(property.tokenInfo.tokenPrice)}</span>
+            <span className="font-medium">{formatETH(tokenPriceWei)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Quantite</span>
@@ -218,7 +219,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
           </div>
           <div className="border-t border-gray-200 pt-2 flex justify-between">
             <span className="font-semibold text-gray-900">Total</span>
-            <span className="font-bold text-xl text-orange">{formatETH(totalCost)}</span>
+            <span className="font-bold text-xl text-orange">{formatETH(totalCostWei)}</span>
           </div>
         </div>
 

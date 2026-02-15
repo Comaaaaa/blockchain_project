@@ -31,6 +31,7 @@ export interface TokenInfo {
   totalTokens: number;
   availableTokens: number;
   tokenPrice: number;
+  tokenPriceWei?: string;
   tokenSymbol: string;
   contractAddress?: string;
   blockchain: string;
@@ -68,6 +69,7 @@ export interface Transaction {
   tokens: number;
   pricePerToken: number;
   totalAmount: number;
+  totalAmountWei?: string;
   txHash: string;
   status: TransactionStatus;
   createdAt: string;
@@ -88,6 +90,8 @@ export interface MarketplaceListing {
   tokensForSale: number;
   pricePerToken: number;
   totalPrice: number;
+  pricePerTokenWei?: string;
+  totalPriceWei?: string;
   status: ListingStatus;
   createdAt: string;
   expiresAt?: string;

@@ -61,7 +61,7 @@ export default function PropertyCard({ property }: PropertyCardProps) {
           <div className="mt-3 flex items-center justify-between">
             <div>
               <p className="text-2xl font-bold text-orange">
-                {formatETH(property.tokenInfo.tokenPrice)}
+                {formatETH(property.tokenInfo.tokenPriceWei || 0)}
               </p>
               <p className="text-xs text-gray-500">par token</p>
             </div>
