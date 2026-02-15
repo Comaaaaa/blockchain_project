@@ -64,7 +64,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
       }
 
       if (isCompliant !== true) {
-        setResult({ success: false, message: 'Votre wallet doit etre whiteliste KYC avant achat.' });
+        setResult({ success: false, message: 'Votre wallet doit être whitelisté KYC avant achat.' });
         setLoading(false);
         return;
       }
