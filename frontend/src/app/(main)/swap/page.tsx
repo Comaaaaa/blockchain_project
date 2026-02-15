@@ -14,7 +14,7 @@ import {
 } from '@/lib/contracts';
 import { useTransactionContext } from '@/context/TransactionContext';
 import { useAccount, useWriteContract } from 'wagmi';
-import { parseEther, formatEther, parseUnits } from 'viem';
+import { parseEther, formatEther, parseUnits, formatUnits } from 'viem';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ArrowsRightLeftIcon,
@@ -168,7 +168,7 @@ export default function SwapPage() {
         }
       } else {
         const tokenInWei = parseUnits(amount, tokenDecimals);
-        swapTokens = Number(amount);
+        swapTokens = Number(formatUnits(tokenInWei, tokenDecimals));
         const spender =
           dex === 'pool'
             ? addresses.TokenSwapPool
