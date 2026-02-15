@@ -25,6 +25,14 @@ function getStatusVariant(status: string): 'success' | 'warning' | 'info' | 'def
 
 export default function PropertyCard({ property }: PropertyCardProps) {
   const funded = property.tokenInfo.totalTokens - property.tokenInfo.availableTokens;
+  let tokenPriceWei = BigInt(0);
+  try {
+    if (property.tokenInfo.tokenPriceWei) {
+      tokenPriceWei = BigInt(property.tokenInfo.tokenPriceWei);
+    }
+  } catch {
+    tokenPriceWei = BigInt(0);
+  }
 
   return (
     <Link href={`/properties/${property.id}`}>
@@ -61,7 +69,7 @@ export default function PropertyCard({ property }: PropertyCardProps) {
           <div className="mt-3 flex items-center justify-between">
             <div>
               <p className="text-2xl font-bold text-orange">
-                {formatETH(property.tokenInfo.tokenPriceWei || 0)}
+                {tokenPriceWei > BigInt(0) ? formatETH(tokenPriceWei) : 'Prix non defini'}
               </p>
               <p className="text-xs text-gray-500">par token</p>
             </div>
