@@ -29,12 +29,12 @@ async function main() {
   const complianceAddr = await compliance.getAddress();
   console.log("ComplianceRegistry deployed at:", complianceAddr);
 
-  // Whitelist the deployer + all default Hardhat test accounts
+  // Whitelist the deployer + first 9 default Hardhat test accounts
   const signers = await hre.ethers.getSigners();
   const accountsToWhitelist = signers.slice(0, 10).map(s => s.address);
   const txBatchWL = await compliance.batchWhitelist(accountsToWhitelist);
   await txBatchWL.wait();
-  console.log(`Whitelisted ${accountsToWhitelist.length} accounts (deployer + test accounts)`);
+  console.log(`Whitelisted ${accountsToWhitelist.length} accounts (deployer + first 9 Hardhat test accounts)`);
 
   // 2. Deploy PriceOracle
   console.log("\n--- Deploying PriceOracle ---");
