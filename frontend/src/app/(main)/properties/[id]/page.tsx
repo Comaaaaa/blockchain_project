@@ -13,12 +13,14 @@ import Badge from '@/components/ui/Badge';
 import ProgressBar from '@/components/ui/ProgressBar';
 import {
   formatCurrency,
+  formatETH,
   formatPercent,
   getPropertyTypeLabel,
   getStatusLabel,
   shortenAddress,
   formatValuationFromWei,
 } from '@/lib/utils';
+import { useETHPrice, formatWeiAsEUR } from '@/hooks/useETHPrice';
 import {
   MapPinIcon,
   CalendarIcon,
@@ -31,6 +33,7 @@ import {
 
 export default function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { ethPrice } = useETHPrice();
   const { state } = usePropertyContext();
   const property = state.properties.find((p) => p.id === id);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -167,8 +170,13 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
                 </div>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Prix total</p>
-                <p className="font-medium text-orange">{formatCurrency(property.price)}</p>
+                <p className="text-sm text-gray-500">Val. tokenisee</p>
+                <p className="font-medium text-orange">
+                  {formatETH(BigInt(property.tokenInfo.tokenPriceWei || 0) * BigInt(property.tokenInfo.totalTokens))}
+                </p>
+                <p className="text-xs text-gray-400">
+                  ~{formatWeiAsEUR(BigInt(property.tokenInfo.tokenPriceWei || 0) * BigInt(property.tokenInfo.totalTokens), ethPrice)}
+                </p>
               </div>
             </div>
           </div>
@@ -237,7 +245,10 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Valorisation</span>
-                  <span className="font-bold text-gray-900">{formatValuationFromWei(linkedNft.valuationWei)}</span>
+                  <span className="text-right">
+                    <span className="font-bold text-gray-900">{formatValuationFromWei(linkedNft.valuationWei)}</span>
+                    <span className="block text-xs text-gray-400">~{formatWeiAsEUR(linkedNft.valuationWei, ethPrice)}</span>
+                  </span>
                 </div>
                 <div className="pt-2">
                   <Link
@@ -274,8 +285,13 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Prix par token</span>
-                <span className="font-bold text-xl text-orange">
-                  {formatCurrency(property.tokenInfo.tokenPrice)}
+                <span className="text-right">
+                  <span className="font-bold text-xl text-orange">
+                    {formatETH(property.tokenInfo.tokenPriceWei || 0)}
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    ~{formatWeiAsEUR(property.tokenInfo.tokenPriceWei || 0, ethPrice)}
+                  </span>
                 </span>
               </div>
               <div className="flex justify-between">

@@ -129,6 +129,9 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
   // Listing created
   const createdFilter = marketplace.filters.ListingCreated();
   const createdEvents = await marketplace.queryFilter(createdFilter, fromBlock, toBlock);
+  const propertyByTokenStmt = db.prepare(
+    `SELECT id FROM properties WHERE LOWER(token_address) = ?`
+  );
 
   for (const event of createdEvents) {
     const listingId = event.args[0].toString();
@@ -137,13 +140,18 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
     const amount = event.args[3].toString();
     const pricePerToken = event.args[4].toString();
 
+    // Resolve token_address to property_id
+    const property = propertyByTokenStmt.get(tokenAddress.toLowerCase());
+    const propertyId = property ? property.id : null;
+
     db.prepare(
-      `INSERT OR IGNORE INTO marketplace_listings (listing_id_onchain, seller_address, token_address, amount, price_per_token_wei, active, tx_hash)
-       VALUES (?, ?, ?, ?, ?, 1, ?)`
+      `INSERT OR REPLACE INTO marketplace_listings (listing_id_onchain, seller_address, token_address, property_id, amount, price_per_token_wei, listing_status, active, tx_hash)
+       VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?)`
     ).run(
       parseInt(listingId),
       seller.toLowerCase(),
       tokenAddress.toLowerCase(),
+      propertyId,
       parseInt(amount),
       pricePerToken,
       event.transactionHash
@@ -161,7 +169,7 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
     const totalPrice = event.args[3].toString();
 
     db.prepare(
-      `UPDATE marketplace_listings SET active = 0 WHERE listing_id_onchain = ?`
+      `UPDATE marketplace_listings SET active = 0, listing_status = 'sold' WHERE listing_id_onchain = ?`
     ).run(parseInt(listingId));
 
     db.prepare(
@@ -185,7 +193,7 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
   for (const event of cancelledEvents) {
     const listingId = event.args[0].toString();
     db.prepare(
-      `UPDATE marketplace_listings SET active = 0 WHERE listing_id_onchain = ?`
+      `UPDATE marketplace_listings SET active = 0, listing_status = 'cancelled' WHERE listing_id_onchain = ?`
     ).run(parseInt(listingId));
   }
 
@@ -253,7 +261,7 @@ async function indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, toBlock)
     const price = event.args[4].toString();
 
     db.prepare(
-      `INSERT OR IGNORE INTO nft_listings (listing_id_onchain, seller_address, nft_contract, nft_token_id, price_wei, active, tx_hash)
+      `INSERT OR REPLACE INTO nft_listings (listing_id_onchain, seller_address, nft_contract, nft_token_id, price_wei, active, tx_hash)
        VALUES (?, ?, ?, ?, ?, 1, ?)`
     ).run(
       parseInt(listingId),
@@ -274,6 +282,7 @@ async function indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, toBlock)
     const buyer = event.args[1];
     const tokenId = event.args[2].toString();
     const price = event.args[3].toString();
+    const tokenIdInt = parseInt(tokenId);
 
     db.prepare(
       `UPDATE nft_listings SET active = 0, buyer_address = ? WHERE listing_id_onchain = ?`
@@ -282,15 +291,22 @@ async function indexNFTMarketplaceEvents(db, nftMarketplace, fromBlock, toBlock)
     // Update NFT owner
     db.prepare(
       `UPDATE nfts SET owner_address = ? WHERE token_id = ?`
-    ).run(buyer.toLowerCase(), parseInt(tokenId));
+    ).run(buyer.toLowerCase(), tokenIdInt);
+
+    const nftRow = db.prepare(
+      `SELECT property_id FROM nfts WHERE token_id = ?`
+    ).get(tokenIdInt);
 
     db.prepare(
-      `INSERT OR IGNORE INTO transactions (id, type, from_address, to_address, total_amount_wei, tx_hash, block_number, status)
-       VALUES (?, 'listing_sold', ?, ?, ?, ?, ?, 'confirmed')`
+      `INSERT OR IGNORE INTO transactions (id, type, property_id, token_address, from_address, to_address, tokens, total_amount_wei, tx_hash, block_number, status)
+       VALUES (?, 'listing_sold', ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`
     ).run(
       `tx-${event.transactionHash.slice(0, 16)}-nft`,
+      nftRow?.property_id || null,
+      `nft:${tokenIdInt}`,
       "nft_marketplace",
       buyer.toLowerCase(),
+      1,
       price,
       event.transactionHash,
       event.blockNumber

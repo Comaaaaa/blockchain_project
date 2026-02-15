@@ -85,6 +85,7 @@ function initTables() {
       property_id TEXT,
       amount INTEGER,
       price_per_token_wei TEXT,
+      listing_status TEXT DEFAULT 'active',
       active INTEGER DEFAULT 1,
       tx_hash TEXT,
       created_at TEXT DEFAULT (datetime('now')),
@@ -114,6 +115,20 @@ function initTables() {
   } catch (e) {
     // Column already exists, ignore
   }
+
+  // Migration: add listing_status column to existing marketplace_listings table
+  try {
+    db.exec(`ALTER TABLE marketplace_listings ADD COLUMN listing_status TEXT DEFAULT 'active'`);
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  // Backfill listing_status for existing rows
+  db.exec(`
+    UPDATE marketplace_listings
+    SET listing_status = CASE WHEN active = 1 THEN 'active' ELSE 'sold' END
+    WHERE listing_status IS NULL
+  `);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS nfts (

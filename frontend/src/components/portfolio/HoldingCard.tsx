@@ -13,26 +13,35 @@ interface HoldingCardProps {
 export default function HoldingCard({ holding }: HoldingCardProps) {
   const currentTotal = holding.tokens * holding.currentValue;
   const isPositive = holding.unrealizedGain >= 0;
+  const imageSrc = holding.property.images.find((img) => typeof img === 'string' && img.trim().length > 0);
+  const isNftHolding = holding.propertyId.startsWith('nft-');
+  const href = isNftHolding ? '/nfts' : `/properties/${holding.propertyId}`;
 
   return (
     <Card className="p-4">
       <div className="flex gap-4">
         {/* Image */}
-        <Link href={`/properties/${holding.propertyId}`} className="shrink-0">
+        <Link href={href} className="shrink-0">
           <div className="relative w-24 h-24 rounded-lg overflow-hidden">
-            <Image
-              src={holding.property.images[0]}
-              alt={holding.property.title}
-              fill
-              className="object-cover"
-              sizes="96px"
-            />
+            {imageSrc ? (
+              <Image
+                src={imageSrc}
+                alt={holding.property.title}
+                fill
+                className="object-cover"
+                sizes="96px"
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">
+                No img
+              </div>
+            )}
           </div>
         </Link>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <Link href={`/properties/${holding.propertyId}`}>
+          <Link href={href}>
             <h3 className="font-semibold text-gray-900 hover:text-orange transition-colors truncate">
               {holding.property.title}
             </h3>
@@ -61,7 +70,9 @@ export default function HoldingCard({ holding }: HoldingCardProps) {
           </div>
 
           <p className="text-xs text-gray-400 mt-2">
-            Achat le {formatDate(holding.purchaseDate)} - Rendement: {holding.property.financials.netYield}%
+            {isNftHolding
+              ? `Achat le ${formatDate(holding.purchaseDate)} - Actif NFT`
+              : `Achat le ${formatDate(holding.purchaseDate)} - Rendement: ${holding.property.financials.netYield}%`}
           </p>
         </div>
       </div>

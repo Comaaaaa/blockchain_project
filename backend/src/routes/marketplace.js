@@ -5,12 +5,16 @@ const { getContract, getAddresses, getProvider } = require("../services/blockcha
 
 const router = express.Router();
 
-// GET /api/marketplace/listings — All active listings
+// GET /api/marketplace/listings — All active listings (enriched with property data)
 router.get("/listings", (req, res) => {
   const db = getDb();
   const listings = db
     .prepare(
-      `SELECT ml.*, p.title as property_title, p.city, p.type as property_type
+      `SELECT ml.*,
+              p.id as prop_id, p.title as property_title, p.city, p.type as property_type,
+              p.images as property_images, p.token_symbol, p.token_price_wei,
+              p.total_tokens, p.tokens_sold, p.price as property_price,
+              p.net_yield, p.surface
        FROM marketplace_listings ml
        LEFT JOIN properties p ON ml.property_id = p.id
        WHERE ml.active = 1
@@ -25,12 +29,35 @@ router.get("/listings/all", (req, res) => {
   const db = getDb();
   const listings = db
     .prepare(
-      `SELECT ml.*, p.title as property_title, p.city
+      `SELECT ml.*,
+              p.id as prop_id, p.title as property_title, p.city, p.type as property_type,
+              p.images as property_images, p.token_symbol, p.token_price_wei,
+              p.total_tokens, p.tokens_sold, p.price as property_price,
+              p.net_yield, p.surface
        FROM marketplace_listings ml
        LEFT JOIN properties p ON ml.property_id = p.id
        ORDER BY ml.created_at DESC`
     )
     .all();
+  res.json(listings);
+});
+
+// GET /api/marketplace/listings/seller/:address — Listings by seller
+router.get("/listings/seller/:address", (req, res) => {
+  const db = getDb();
+  const listings = db
+    .prepare(
+      `SELECT ml.*,
+              p.id as prop_id, p.title as property_title, p.city, p.type as property_type,
+              p.images as property_images, p.token_symbol, p.token_price_wei,
+              p.total_tokens, p.tokens_sold, p.price as property_price,
+              p.net_yield, p.surface
+       FROM marketplace_listings ml
+       LEFT JOIN properties p ON ml.property_id = p.id
+       WHERE LOWER(ml.seller_address) = ?
+       ORDER BY ml.created_at DESC`
+    )
+    .all(req.params.address.toLowerCase());
   res.json(listings);
 });
 

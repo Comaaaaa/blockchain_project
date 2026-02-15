@@ -1,7 +1,22 @@
 const hre = require("hardhat");
-const { properties } = require("../properties-config");
+const { properties, ETH_EUR_RATE } = require("../properties-config");
 
 async function main() {
+  const envNftListPriceEth = process.env.NFT_LISTING_PRICE_ETH;
+  const envLiquidityTokens = process.env.INITIAL_LIQUIDITY_TOKENS;
+  const envLiquidityEth = process.env.INITIAL_LIQUIDITY_ETH;
+  const envDemoListingTokens = process.env.DEMO_LISTING_TOKENS;
+
+  const liquidityTokens = Number(envLiquidityTokens || "200");
+  if (!Number.isFinite(liquidityTokens) || liquidityTokens <= 0) {
+    throw new Error("INITIAL_LIQUIDITY_TOKENS must be a positive number");
+  }
+
+  const demoListingTokens = Number(envDemoListingTokens || "50");
+  if (!Number.isFinite(demoListingTokens) || demoListingTokens <= 0) {
+    throw new Error("DEMO_LISTING_TOKENS must be a positive number");
+  }
+
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deploying contracts with account:", deployer.address);
   console.log("Account balance:", (await hre.ethers.provider.getBalance(deployer.address)).toString());
@@ -14,10 +29,12 @@ async function main() {
   const complianceAddr = await compliance.getAddress();
   console.log("ComplianceRegistry deployed at:", complianceAddr);
 
-  // Whitelist the deployer
-  const txWL0 = await compliance.addToWhitelist(deployer.address);
-  await txWL0.wait();
-  console.log("Deployer whitelisted:", deployer.address);
+  // Whitelist the deployer + first 9 default Hardhat test accounts
+  const signers = await hre.ethers.getSigners();
+  const accountsToWhitelist = signers.slice(0, 10).map(s => s.address);
+  const txBatchWL = await compliance.batchWhitelist(accountsToWhitelist);
+  await txBatchWL.wait();
+  console.log(`Whitelisted ${accountsToWhitelist.length} accounts (deployer + first 9 Hardhat test accounts)`);
 
   // 2. Deploy PriceOracle
   console.log("\n--- Deploying PriceOracle ---");
@@ -39,18 +56,23 @@ async function main() {
   const propertyNFTAddr = await propertyNFT.getAddress();
   console.log("PropertyNFT deployed at:", propertyNFTAddr);
 
-  // Mint a demo NFT linked to prop-001
-  const valuation = hre.ethers.parseEther("0.52"); // 0.52 ETH
-  const txMintNFT = await propertyNFT.mintAsset(
-    deployer.address,
-    "ipfs://QmTokenImmo/prop-001",
-    "property_deed",
-    "15 Rue de Grenelle, 75007 Paris",
-    valuation,
-    "prop-001"
-  );
-  await txMintNFT.wait();
-  console.log("Demo NFT minted for prop-001");
+  // Mint NFTs for the first 3 properties
+  const nftProperties = properties.slice(0, 3);
+  for (let i = 0; i < nftProperties.length; i++) {
+    const prop = nftProperties[i];
+    const valuationETH = (prop.price / ETH_EUR_RATE).toFixed(18);
+    const valuation = hre.ethers.parseEther(valuationETH);
+    const txMintNFT = await propertyNFT.mintAsset(
+      deployer.address,
+      `ipfs://QmTokenImmo/${prop.id}`,
+      "property_deed",
+      `${prop.address}, ${prop.zip_code} ${prop.city}`,
+      valuation,
+      prop.id
+    );
+    await txMintNFT.wait();
+    console.log(`NFT #${i} minted for ${prop.id} (${prop.title})`);
+  }
 
   // 4. Deploy PropertyToken contracts dynamically
   const deployedPropertyTokens = [];
@@ -130,15 +152,48 @@ async function main() {
   await txWL3.wait();
   console.log("NFTMarketplace whitelisted");
 
-  // 9. Provide initial liquidity to the pool
+  // 9. Create demo NFT listings on the NFTMarketplace
+  console.log("\n--- Creating demo NFT listings ---");
+  // List NFT #0 and #1 for sale on the NFTMarketplace
+  for (let tokenId = 0; tokenId < 2; tokenId++) {
+    const prop = nftProperties[tokenId];
+    const listPriceETH = envNftListPriceEth || (prop.price / ETH_EUR_RATE).toFixed(18);
+    const listPrice = hre.ethers.parseEther(listPriceETH);
+    // Approve the NFTMarketplace to transfer this NFT
+    const txApprove = await propertyNFT.approve(nftMarketplaceAddr, tokenId);
+    await txApprove.wait();
+    // Create listing
+    const txList = await nftMarketplace.createListing(propertyNFTAddr, tokenId, listPrice);
+    await txList.wait();
+    console.log(`NFT #${tokenId} listed for sale at ${listPriceETH} ETH (${prop.title})`);
+  }
+
+  // 10. Provide initial liquidity to the pool
   console.log("\n--- Adding initial liquidity ---");
-  const liquidityTokens = 200; // 200 tokens
-  const liquidityETH = hre.ethers.parseEther("0.2"); // 0.2 ETH
+  // Liquidite ETH proportionnelle au prix des tokens
+  const firstTokenPriceWei = BigInt(deployedPropertyTokens[0].instance ? properties.find(p => p.token_symbol === deployedPropertyTokens[0].symbol).token_price_wei : "0");
+  const liquidityETHWei = envLiquidityEth
+    ? hre.ethers.parseEther(envLiquidityEth)
+    : firstTokenPriceWei * BigInt(liquidityTokens);
+  const liquidityETHFormatted = hre.ethers.formatEther(liquidityETHWei);
 
   // Approve swapPool to spend deployer's tokens
-  await firstPropertyTokenInstance.approve(swapPoolAddr, liquidityTokens);
-  await swapPool.addLiquidity(liquidityTokens, { value: liquidityETH });
-  console.log(`Added liquidity: ${liquidityTokens} ${deployedPropertyTokens[0].symbol} + 0.2 ETH`);
+  await firstPropertyTokenInstance.approve(swapPoolAddr, BigInt(liquidityTokens));
+  await swapPool.addLiquidity(BigInt(liquidityTokens), { value: liquidityETHWei });
+  console.log(`Added liquidity: ${liquidityTokens} ${deployedPropertyTokens[0].symbol} + ${liquidityETHFormatted} ETH`);
+
+  // 11. Create a demo token marketplace listing
+  console.log("\n--- Creating demo token listing ---");
+  const demoTokenPrice = BigInt(properties[0].token_price_wei);
+  // Approve the marketplace to transfer tokens from deployer
+  await firstPropertyTokenInstance.approve(marketplaceAddr, BigInt(demoListingTokens));
+  const txCreateListing = await marketplace.createListing(
+    firstPropertyTokenAddr,
+    BigInt(demoListingTokens),
+    demoTokenPrice
+  );
+  await txCreateListing.wait();
+  console.log(`Listed ${demoListingTokens} ${deployedPropertyTokens[0].symbol} tokens at ${hre.ethers.formatEther(demoTokenPrice)} ETH/token`);
 
   // Summary
   console.log("\n========================================");

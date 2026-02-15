@@ -5,7 +5,7 @@
 require("dotenv").config();
 const { getDb } = require("./database");
 
-const { properties } = require("../../../blockchain/properties-config");
+const { properties, ETH_EUR_RATE } = require("../../../blockchain/properties-config");
 
 function seed() {
   const db = getDb();
@@ -58,35 +58,22 @@ function seed() {
   console.log(`[Seed] Inserted ${properties.length} properties`);
 
   // Seed NFTs linked to the first 3 properties
-  const nfts = [
-    {
-      token_id: 0,
-      owner_address: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-      asset_type: "property_deed",
-      location: "15 Rue de Grenelle, 75007 Paris",
-      valuation_wei: "520000000000000000",
-      token_uri: "ipfs://QmTokenImmo/prop-001",
-      property_id: "prop-001",
-    },
-    {
-      token_id: 1,
-      owner_address: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-      asset_type: "property_deed",
-      location: "22 Quai Perrache, 69002 Lyon",
-      valuation_wei: "380000000000000000",
-      token_uri: "ipfs://QmTokenImmo/prop-002",
-      property_id: "prop-002",
-    },
-    {
-      token_id: 2,
-      owner_address: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-      asset_type: "property_deed",
-      location: "8 Boulevard de la Mer, 06000 Nice",
-      valuation_wei: "890000000000000000",
-      token_uri: "ipfs://QmTokenImmo/prop-003",
-      property_id: "prop-003",
-    },
-  ];
+  // Valorisation = prix du bien en ETH (prix EUR / taux ETH/EUR), converti en wei
+  function computeValuationWei(priceEUR) {
+    const ethValue = priceEUR / ETH_EUR_RATE;
+    return BigInt(Math.round(ethValue * 1e18)).toString();
+  }
+
+  const nftProperties = properties.slice(0, 3);
+  const nfts = nftProperties.map((p, i) => ({
+    token_id: i,
+    owner_address: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    asset_type: "property_deed",
+    location: `${p.address}, ${p.zip_code} ${p.city}`,
+    valuation_wei: computeValuationWei(p.price),
+    token_uri: `ipfs://QmTokenImmo/${p.id}`,
+    property_id: p.id,
+  }));
 
   const insertNft = db.prepare(`
     INSERT INTO nfts (token_id, owner_address, asset_type, location, valuation_wei, token_uri, property_id)

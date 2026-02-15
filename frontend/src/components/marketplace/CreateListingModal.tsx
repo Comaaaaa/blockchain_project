@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useMarketplaceContext } from '@/context/MarketplaceContext';
 import { PropertyTokenABI, PropertyMarketplaceABI, getContractAddresses } from '@/lib/contracts';
-import { formatCurrency } from '@/lib/utils';
+import { formatETH } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { useAccount, useWriteContract } from 'wagmi';
-import { parseEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 
 interface CreateListingModalProps {
   isOpen: boolean;
@@ -20,13 +20,13 @@ interface CreateListingModalProps {
 export default function CreateListingModal({ isOpen, onClose }: CreateListingModalProps) {
   const { state: portfolioState } = usePortfolioContext();
   const { refetch } = useMarketplaceContext();
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const addresses = getContractAddresses();
 
   const [selectedProperty, setSelectedProperty] = useState('');
   const [tokens, setTokens] = useState(1);
-  const [pricePerToken, setPricePerToken] = useState(0);
+  const [pricePerTokenETH, setPricePerTokenETH] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -40,8 +40,18 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
     })),
   ];
 
+  let priceWei = BigInt(0);
+  try {
+    if (pricePerTokenETH && /^\d*\.?\d*$/.test(pricePerTokenETH) && pricePerTokenETH !== '.') {
+      priceWei = parseEther(pricePerTokenETH);
+    }
+  } catch {
+    // Invalid input, keep 0
+  }
+  const totalWei = priceWei * BigInt(tokens);
+
   const handleCreate = async () => {
-    if (!holding || tokens < 1 || pricePerToken < 1 || !isConnected) return;
+    if (!holding || tokens < 1 || !pricePerTokenETH || priceWei === BigInt(0) || !isConnected) return;
 
     setLoading(true);
     setResult(null);
@@ -53,8 +63,6 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
         setLoading(false);
         return;
       }
-
-      const priceWei = parseEther(String(pricePerToken / 1000)); // Convert EUR-like price to ETH
 
       // 1. Approve marketplace to spend tokens
       await writeContractAsync({
@@ -78,7 +86,7 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
         setResult(null);
         setSelectedProperty('');
         setTokens(1);
-        setPricePerToken(0);
+        setPricePerTokenETH('');
         refetch();
       }, 1500);
     } catch (error: any) {
@@ -104,7 +112,21 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
           onChange={(e) => {
             setSelectedProperty(e.target.value);
             const h = portfolioState.holdings.find((h) => h.propertyId === e.target.value);
-            if (h) setPricePerToken(Math.round(h.currentValue * 1.05));
+            if (h) {
+              let baseWei = BigInt(0);
+              if (h.property.tokenInfo.tokenPriceWei) {
+                baseWei = BigInt(h.property.tokenInfo.tokenPriceWei);
+              } else if (h.property.tokenInfo.tokenPrice > 0) {
+                baseWei = parseEther(String(h.property.tokenInfo.tokenPrice));
+              }
+
+              if (baseWei > BigInt(0)) {
+                const suggestedWei = (baseWei * BigInt(105)) / BigInt(100);
+                const suggestedEth = formatEther(suggestedWei);
+                const [intPart, fracPart = ''] = suggestedEth.split('.');
+                setPricePerTokenETH(`${intPart}.${fracPart.slice(0, 6)}`.replace(/\.$/, ''));
+              }
+            }
           }}
         />
 
@@ -120,26 +142,30 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
             />
 
             <Input
-              label="Prix par token (EUR)"
-              type="number"
-              min={1}
-              value={pricePerToken}
-              onChange={(e) => setPricePerToken(parseInt(e.target.value) || 0)}
+              label="Prix par token (ETH)"
+              type="text"
+              placeholder="0.001"
+              value={pricePerTokenETH}
+              onChange={(e) => setPricePerTokenETH(e.target.value)}
             />
 
             <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Prix actuel du token</span>
-                <span>{formatCurrency(holding.currentValue)}</span>
-              </div>
+              {(holding.property.tokenInfo.tokenPriceWei || holding.property.tokenInfo.tokenPrice > 0) && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Prix initial du token</span>
+                  <span>{formatETH(holding.property.tokenInfo.tokenPriceWei || 0)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-600">Votre prix de vente</span>
-                <span className="font-semibold text-orange">{formatCurrency(pricePerToken)}</span>
+                <span className="font-semibold text-orange">
+                  {priceWei > BigInt(0) ? formatETH(priceWei.toString()) : '—'}
+                </span>
               </div>
               <div className="flex justify-between border-t border-gray-200 pt-1">
-                <span className="font-semibold">Total</span>
+                <span className="font-semibold">Total ({tokens} tokens)</span>
                 <span className="font-bold text-orange">
-                  {formatCurrency(tokens * pricePerToken)}
+                  {totalWei > BigInt(0) ? formatETH(totalWei.toString()) : '—'}
                 </span>
               </div>
             </div>
@@ -147,7 +173,7 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
             <Button
               onClick={handleCreate}
               loading={loading}
-              disabled={tokens < 1 || pricePerToken < 1 || !isConnected}
+              disabled={tokens < 1 || !pricePerTokenETH || priceWei === BigInt(0) || !isConnected}
               className="w-full"
             >
               Mettre en vente

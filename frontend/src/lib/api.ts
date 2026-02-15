@@ -51,6 +51,7 @@ export const api = {
   // Marketplace
   getActiveListings: () => fetchApi<any[]>('/marketplace/listings'),
   getAllListings: () => fetchApi<any[]>('/marketplace/listings/all'),
+  getListingsBySeller: (address: string) => fetchApi<any[]>(`/marketplace/listings/seller/${address}`),
   getPoolInfo: () => fetchApi<any>('/marketplace/pool'),
   getSwapQuote: (direction: string, amount: string) =>
     fetchApi<any>(`/marketplace/pool/quote?direction=${direction}&amount=${amount}`),

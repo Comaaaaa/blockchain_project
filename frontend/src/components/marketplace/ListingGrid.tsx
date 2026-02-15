@@ -6,9 +6,12 @@ import ListingCard from './ListingCard';
 interface ListingGridProps {
   listings: MarketplaceListing[];
   onBuy?: (listing: MarketplaceListing) => void;
+  onCancel?: (listing: MarketplaceListing) => void;
+  currentAddress?: string;
+  cancellingListingId?: string | null;
 }
 
-export default function ListingGrid({ listings, onBuy }: ListingGridProps) {
+export default function ListingGrid({ listings, onBuy, onCancel, currentAddress, cancellingListingId }: ListingGridProps) {
   if (listings.length === 0) {
     return (
       <div className="text-center py-12">
@@ -20,9 +23,21 @@ export default function ListingGrid({ listings, onBuy }: ListingGridProps) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {listings.map((listing) => (
-        <ListingCard key={listing.id} listing={listing} onBuy={onBuy} />
-      ))}
+      {listings.map((listing) => {
+        const isOwner = currentAddress
+          ? listing.sellerAddress.toLowerCase() === currentAddress.toLowerCase()
+          : false;
+        return (
+          <ListingCard
+            key={listing.id}
+            listing={listing}
+            onBuy={onBuy}
+            onCancel={onCancel}
+            isOwner={isOwner}
+            isCancelling={cancellingListingId === listing.id}
+          />
+        );
+      })}
     </div>
   );
 }

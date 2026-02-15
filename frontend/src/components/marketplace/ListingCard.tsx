@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { MarketplaceListing } from '@/types';
-import { formatCurrency, shortenAddress } from '@/lib/utils';
+import { formatETH, shortenAddress } from '@/lib/utils';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -11,24 +11,42 @@ import Button from '@/components/ui/Button';
 interface ListingCardProps {
   listing: MarketplaceListing;
   onBuy?: (listing: MarketplaceListing) => void;
+  onCancel?: (listing: MarketplaceListing) => void;
+  isOwner?: boolean;
+  isCancelling?: boolean;
 }
 
-export default function ListingCard({ listing, onBuy }: ListingCardProps) {
-  const priceDiff = listing.pricePerToken - listing.property.tokenInfo.tokenPrice;
-  const priceDiffPercent = (priceDiff / listing.property.tokenInfo.tokenPrice) * 100;
+export default function ListingCard({ listing, onBuy, onCancel, isOwner, isCancelling = false }: ListingCardProps) {
+  const initialPriceWei = BigInt(listing.property.tokenInfo.tokenPriceWei || 0);
+  const listingPriceWei = BigInt(listing.pricePerTokenWei || 0);
+  const priceDiffWei = listingPriceWei - initialPriceWei;
+  const priceDiffPercent =
+    initialPriceWei > BigInt(0)
+      ? Number((priceDiffWei * BigInt(10000)) / initialPriceWei) / 100
+      : 0;
+  const imageSrc = listing.property.images.find((img) => typeof img === 'string' && img.trim().length > 0);
+
+  const statusVariant = listing.status === 'active' ? 'success' : listing.status === 'sold' ? 'default' : 'default';
+  const statusLabel = listing.status === 'active' ? 'Actif' : listing.status === 'sold' ? 'Vendu' : 'Annule';
 
   return (
     <Card hover className="p-4">
       <div className="flex gap-4">
         <Link href={`/properties/${listing.propertyId}`} className="shrink-0">
-          <div className="relative w-20 h-20 rounded-lg overflow-hidden">
-            <Image
-              src={listing.property.images[0]}
-              alt={listing.property.title}
-              fill
-              className="object-cover"
-              sizes="80px"
-            />
+          <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-200">
+            {imageSrc ? (
+              <Image
+                src={imageSrc}
+                alt={listing.property.title}
+                fill
+                className="object-cover"
+                sizes="80px"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                No img
+              </div>
+            )}
           </div>
         </Link>
 
@@ -41,11 +59,15 @@ export default function ListingCard({ listing, onBuy }: ListingCardProps) {
                 </h3>
               </Link>
               <p className="text-xs text-gray-500 mt-0.5">
-                Vendeur: {shortenAddress(listing.sellerAddress)}
+                {listing.property.city && `${listing.property.city} · `}
+                {listing.property.tokenInfo.tokenSymbol && (
+                  <span className="font-medium">{listing.property.tokenInfo.tokenSymbol}</span>
+                )}
+                {' · '}Vendeur: {shortenAddress(listing.sellerAddress)}
               </p>
             </div>
-            <Badge variant={listing.status === 'active' ? 'success' : 'default'}>
-              {listing.status === 'active' ? 'Actif' : listing.status === 'sold' ? 'Vendu' : 'Annule'}
+            <Badge variant={statusVariant}>
+              {statusLabel}
             </Badge>
           </div>
 
@@ -57,24 +79,33 @@ export default function ListingCard({ listing, onBuy }: ListingCardProps) {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Prix/token</p>
-                <p className="font-semibold text-orange">{formatCurrency(listing.pricePerToken)}</p>
+                <p className="font-semibold text-orange">{formatETH(listing.pricePerTokenWei || 0)}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">Total</p>
-                <p className="font-semibold">{formatCurrency(listing.totalPrice)}</p>
+                <p className="font-semibold">{formatETH(listing.totalPriceWei || 0)}</p>
               </div>
             </div>
 
-            {listing.status === 'active' && onBuy && (
-              <Button size="sm" onClick={() => onBuy(listing)}>
-                Acheter
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {listing.status === 'active' && isOwner && onCancel && (
+                <Button size="sm" variant="outline" onClick={() => onCancel(listing)} loading={isCancelling} disabled={isCancelling}>
+                  Annuler
+                </Button>
+              )}
+              {listing.status === 'active' && !isOwner && onBuy && (
+                <Button size="sm" onClick={() => onBuy(listing)}>
+                  Acheter
+                </Button>
+              )}
+            </div>
           </div>
 
-          <p className={`text-xs mt-1 ${priceDiff >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-            {priceDiff >= 0 ? '+' : ''}{priceDiffPercent.toFixed(1)}% vs prix initial
-          </p>
+          {initialPriceWei > BigInt(0) && listing.status === 'active' && (
+            <p className={`text-xs mt-1 ${priceDiffWei >= BigInt(0) ? 'text-red-500' : 'text-green-600'}`}>
+              {priceDiffWei >= BigInt(0) ? '+' : ''}{priceDiffPercent.toFixed(1)}% vs prix initial
+            </p>
+          )}
         </div>
       </div>
     </Card>

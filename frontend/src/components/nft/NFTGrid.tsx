@@ -17,11 +17,11 @@ export default function NFTGrid({ nfts, listings }: NFTGridProps) {
   }
 
   // Build a map of tokenId -> listing for quick lookup
-  const listingByTokenId = new Map<number, NFTListing>();
+  const listingByTokenId = new Map<string, NFTListing>();
   if (listings) {
     for (const listing of listings) {
       if (listing.active) {
-        listingByTokenId.set(listing.tokenId, listing);
+        listingByTokenId.set(String(listing.tokenId), listing);
       }
     }
   }
@@ -32,7 +32,7 @@ export default function NFTGrid({ nfts, listings }: NFTGridProps) {
         <NFTCard
           key={nft.tokenId}
           nft={nft}
-          listing={listingByTokenId.get(nft.tokenId)}
+          listing={listingByTokenId.get(String(nft.tokenId))}
         />
       ))}
     </div>

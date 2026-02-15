@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { NFTMarketplaceABI, getContractAddresses } from '@/lib/contracts';
 import Button from '@/components/ui/Button';
 import { NFTListing } from '@/types';
+import { useETHPrice, formatWeiAsEUR } from '@/hooks/useETHPrice';
 import { useWriteContract } from 'wagmi';
 import { formatEther } from 'viem';
 
@@ -14,6 +15,7 @@ interface NFTBuyButtonProps {
 
 export default function NFTBuyButton({ listing, onSuccess }: NFTBuyButtonProps) {
   const { writeContractAsync } = useWriteContract();
+  const { ethPrice } = useETHPrice();
   const addresses = getContractAddresses();
 
   const [loading, setLoading] = useState(false);
@@ -54,7 +56,7 @@ export default function NFTBuyButton({ listing, onSuccess }: NFTBuyButtonProps) 
   return (
     <div className="space-y-2">
       <Button onClick={handleBuy} loading={loading} className="w-full">
-        Acheter pour {priceETH} ETH
+        Acheter pour {priceETH} ETH (~{formatWeiAsEUR(listing.priceWei, ethPrice)})
       </Button>
       {result && (
         <div

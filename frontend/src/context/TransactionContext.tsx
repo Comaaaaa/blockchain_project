@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import { Transaction } from '@/types';
 import { api } from '@/lib/api';
+import { formatEther, parseEther } from 'viem';
 
 interface TransactionState {
   transactions: Transaction[];
@@ -41,16 +42,23 @@ function transactionReducer(state: TransactionState, action: TransactionAction):
 }
 
 function mapApiTransaction(t: any): Transaction {
+  const fromAddress = (t.from_address || '').toLowerCase();
+  const isNftMarketplacePurchase = fromAddress === 'nft_marketplace' && t.type === 'listing_sold';
+  const mappedType = t.type === 'listing_sold' ? 'purchase' : t.type;
+  const rawTokens = Number(t.tokens || 0);
+  const mappedTokens = isNftMarketplacePurchase && rawTokens === 0 ? 1 : rawTokens;
+
   return {
     id: t.id,
-    type: t.type === 'listing_sold' ? 'purchase' : t.type,
-    propertyId: t.property_id || '',
-    propertyTitle: t.property_title || '',
+    type: mappedType,
+    propertyId: t.property_id || (isNftMarketplacePurchase ? `nft-${t.tx_hash || t.id}` : ''),
+    propertyTitle: t.property_title || (isNftMarketplacePurchase ? 'NFT TokenImmo (Marketplace)' : ''),
     from: t.from_address || '',
     to: t.to_address || '',
-    tokens: t.tokens || 0,
+    tokens: mappedTokens,
     pricePerToken: 0,
-    totalAmount: parseFloat(t.total_amount_wei) || 0,
+    totalAmount: t.total_amount_wei ? Number(formatEther(BigInt(t.total_amount_wei))) : 0,
+    totalAmountWei: t.total_amount_wei ? String(t.total_amount_wei) : undefined,
     txHash: t.tx_hash || '',
     status: t.status || 'confirmed',
     createdAt: t.created_at || new Date().toISOString(),
@@ -64,13 +72,16 @@ function mapApiTransaction(t: any): Transaction {
  */
 async function saveTransactionToBackend(tx: Transaction) {
   try {
+    const totalAmountWei = tx.totalAmountWei
+      || (tx.totalAmount > 0 ? parseEther(String(tx.totalAmount)).toString() : '0');
+
     await api.postTransaction({
       type: tx.type === 'dividend' ? 'purchase' : tx.type,
       property_id: tx.propertyId || undefined,
       from_address: tx.from,
       to_address: tx.to,
       tokens: tx.tokens,
-      total_amount_wei: String(tx.totalAmount),
+      total_amount_wei: totalAmountWei,
       tx_hash: tx.txHash,
       status: tx.status,
     });

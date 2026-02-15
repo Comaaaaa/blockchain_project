@@ -1,4 +1,5 @@
 import clsx, { ClassValue } from 'clsx';
+import { formatEther } from 'viem';
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
@@ -15,6 +16,36 @@ export function formatCurrency(amount: number): string {
 
 export function formatNumber(num: number): string {
   return new Intl.NumberFormat('fr-FR').format(num);
+}
+
+export function formatETH(wei: string | number | bigint): string {
+  if (typeof wei === 'number') {
+    if (!Number.isFinite(wei) || !Number.isInteger(wei)) {
+      throw new Error('formatETH expected an integer number of wei when called with a number');
+    }
+  }
+
+  const weiBig = BigInt(wei);
+  const WEI_PER_ETH = BigInt(10) ** BigInt(18);
+  const WEI_PER_MICRO_ETH = BigInt(10) ** BigInt(12);
+  const POINT0001_ETH_WEI = WEI_PER_ETH / BigInt(10000);
+
+  const toFixedScaled = (scaledValue: bigint, decimals: number): string => {
+    const negative = scaledValue < BigInt(0);
+    let s = (negative ? -scaledValue : scaledValue).toString();
+    while (s.length <= decimals) s = `0${s}`;
+    const integerPart = s.slice(0, s.length - decimals);
+    const fractionalPart = s.slice(s.length - decimals);
+    return `${negative ? '-' : ''}${integerPart}${decimals > 0 ? `.${fractionalPart}` : ''}`;
+  };
+
+  if (weiBig < POINT0001_ETH_WEI) {
+    const microEthScaled = (weiBig * BigInt(100)) / WEI_PER_MICRO_ETH;
+    return `${toFixedScaled(microEthScaled, 2)} μETH`;
+  }
+
+  const ethScaled = (weiBig * BigInt(10000)) / WEI_PER_ETH;
+  return `${toFixedScaled(ethScaled, 4)} ETH`;
 }
 
 export function formatPercent(value: number): string {
@@ -116,7 +147,7 @@ export function getAssetTypeLabel(assetType: string): string {
 }
 
 export function formatValuationFromWei(valuationWei: string): string {
-  const wei = BigInt(valuationWei);
-  const eth = Number(wei) / 1e18;
-  return `${eth.toFixed(4)} ETH`;
+  const eth = formatEther(BigInt(valuationWei));
+  const [intPart, fracPart = ''] = eth.split('.');
+  return `${intPart}.${fracPart.padEnd(4, '0').slice(0, 4)} ETH`;
 }

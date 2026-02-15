@@ -2,21 +2,23 @@
 
 import { useState } from 'react';
 import { Property } from '@/types';
-import { formatCurrency } from '@/lib/utils';
-import { PropertyTokenABI, getContractAddresses } from '@/lib/contracts';
+import { formatETH } from '@/lib/utils';
+import { useETHPrice, formatWeiAsEUR } from '@/hooks/useETHPrice';
+import { PropertyTokenABI, ComplianceRegistryABI, getContractAddresses } from '@/lib/contracts';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useTransactionContext } from '@/context/TransactionContext';
 import { usePropertyContext } from '@/context/PropertyContext';
 import Button from '@/components/ui/Button';
 import { v4 as uuidv4 } from 'uuid';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseEther } from 'viem';
+import { useAccount, useWriteContract, useReadContract } from 'wagmi';
+import { formatEther } from 'viem';
 
 interface TokenPurchaseFormProps {
   property: Property;
 }
 
 export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) {
+  const { ethPrice } = useETHPrice();
   const [tokens, setTokens] = useState(1);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -25,10 +27,22 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
   const { dispatch: propertyDispatch } = usePropertyContext();
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const addresses = getContractAddresses();
 
-  const totalCost = tokens * property.tokenInfo.tokenPrice;
+  // Check compliance on-chain
+  const { data: isCompliant } = useReadContract({
+    address: addresses.ComplianceRegistry as `0x${string}`,
+    abi: ComplianceRegistryABI,
+    functionName: 'isCompliant',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  const tokenPriceWei = property.tokenInfo.tokenPriceWei || '0';
+  const totalCostWei = BigInt(tokenPriceWei) * BigInt(tokens);
   const maxTokens = property.tokenInfo.availableTokens;
   const tokenAddress = property.tokenInfo.contractAddress;
+  const canPurchase = isConnected && isCompliant === true;
 
   const handlePurchase = async () => {
     if (tokens < 1 || tokens > maxTokens) return;
@@ -49,13 +63,20 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         return;
       }
 
+      if (isCompliant !== true) {
+        setResult({ success: false, message: 'Votre wallet doit être whitelisté KYC avant achat.' });
+        setLoading(false);
+        return;
+      }
+
       // Call buyTokens on the PropertyToken contract
+      // tokenPrice is in wei — send exact cost
       const hash = await writeContractAsync({
         address: tokenAddress as `0x${string}`,
         abi: PropertyTokenABI,
         functionName: 'buyTokens',
         args: [BigInt(tokens)],
-        value: parseEther('0.001') * BigInt(tokens), // tokenPrice * tokens
+        value: totalCostWei,
       });
 
       // Record transaction (persisted to backend)
@@ -67,8 +88,9 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         from: '0x0000000000000000000000000000000000000000',
         to: address,
         tokens,
-        pricePerToken: property.tokenInfo.tokenPrice,
-        totalAmount: totalCost,
+        pricePerToken: Number(formatEther(BigInt(tokenPriceWei))),
+        totalAmount: Number(formatEther(totalCostWei)),
+        totalAmountWei: totalCostWei.toString(),
         txHash: hash,
         status: 'confirmed',
         createdAt: new Date().toISOString(),
@@ -79,7 +101,7 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         payload: {
           propertyId: property.id,
           tokens,
-          pricePerToken: property.tokenInfo.tokenPrice,
+          pricePerToken: Number(formatEther(BigInt(tokenPriceWei))),
           property,
         },
       });
@@ -107,12 +129,19 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
       });
       setTokens(1);
     } catch (error: any) {
+      console.error('buyTokens error:', error);
       const msg = error?.shortMessage || error?.message || 'Transaction echouee';
       setResult({
         success: false,
-        message: msg.includes('not KYC')
+        message: msg.includes('Buyer not KYC')
           ? 'Vous devez etre verifie KYC (whitelist) pour acheter des tokens.'
-          : msg,
+          : msg.includes('Sender not KYC')
+            ? 'Le vendeur (owner du token) n\'est pas KYC compliant.'
+            : msg.includes('Recipient not KYC')
+              ? 'Le destinataire n\'est pas KYC compliant on-chain.'
+              : msg.includes('Insufficient ETH')
+                ? 'ETH insuffisant envoye pour cet achat.'
+                : msg,
       });
     } finally {
       setLoading(false);
@@ -137,6 +166,18 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
       {!isConnected && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm text-yellow-700">
           Connectez votre wallet pour acheter des tokens on-chain.
+        </div>
+      )}
+
+      {isConnected && isCompliant === false && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">
+          Votre adresse ({address}) n&apos;est pas whitelistee on-chain. Demandez a un admin de vous ajouter via /admin.
+        </div>
+      )}
+
+      {isConnected && isCompliant === true && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-700">
+          KYC verifie on-chain
         </div>
       )}
 
@@ -178,26 +219,28 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
         <div className="bg-gray-50 rounded-lg p-4 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Prix par token</span>
-            <span className="font-medium">{formatCurrency(property.tokenInfo.tokenPrice)}</span>
+            <span className="text-right">
+              <span className="font-medium">{formatETH(tokenPriceWei)}</span>
+              <span className="block text-xs text-gray-400">~{formatWeiAsEUR(tokenPriceWei, ethPrice)}</span>
+            </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Quantite</span>
             <span className="font-medium">x {tokens}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Gas estime</span>
-            <span className="font-medium text-gray-400">~0.005 ETH</span>
-          </div>
           <div className="border-t border-gray-200 pt-2 flex justify-between">
             <span className="font-semibold text-gray-900">Total</span>
-            <span className="font-bold text-xl text-orange">{formatCurrency(totalCost)}</span>
+            <span className="text-right">
+              <span className="font-bold text-xl text-orange">{formatETH(totalCostWei)}</span>
+              <span className="block text-xs text-gray-400">~{formatWeiAsEUR(totalCostWei, ethPrice)}</span>
+            </span>
           </div>
         </div>
 
         <Button
           onClick={handlePurchase}
           loading={loading}
-          disabled={tokens < 1 || tokens > maxTokens || !isConnected}
+          disabled={tokens < 1 || tokens > maxTokens || !canPurchase}
           className="w-full"
           size="lg"
         >

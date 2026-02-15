@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { Property, PropertyFilters } from '@/types';
 import { api } from '@/lib/api';
+import { formatEther } from 'viem';
 
 interface PropertyState {
   properties: Property[];
@@ -99,7 +100,8 @@ function mapApiProperty(p: any): Property {
     tokenInfo: {
       totalTokens: p.total_tokens || 0,
       availableTokens: (p.total_tokens || 0) - (p.tokens_sold || 0),
-      tokenPrice: p.price && p.total_tokens ? Math.round(p.price / p.total_tokens) : 0,
+      tokenPrice: p.token_price_wei ? Number(formatEther(BigInt(p.token_price_wei))) : 0,
+      tokenPriceWei: p.token_price_wei ? String(p.token_price_wei) : '0',
       tokenSymbol: p.token_symbol || '',
       contractAddress: p.token_address || undefined,
       blockchain: 'Ethereum Sepolia',
