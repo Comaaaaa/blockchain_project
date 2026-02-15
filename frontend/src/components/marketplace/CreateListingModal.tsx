@@ -51,7 +51,7 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
   const totalWei = priceWei * BigInt(tokens);
 
   const handleCreate = async () => {
-    if (!holding || tokens < 1 || !pricePerTokenETH || !isConnected) return;
+    if (!holding || tokens < 1 || !pricePerTokenETH || priceWei === 0n || !isConnected) return;
 
     setLoading(true);
     setResult(null);
