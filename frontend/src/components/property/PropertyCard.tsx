@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Property } from '@/types';
-import { formatCurrency, getPropertyTypeLabel, getStatusLabel } from '@/lib/utils';
+import { formatCurrency, formatETH, getPropertyTypeLabel, getStatusLabel } from '@/lib/utils';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -61,7 +61,7 @@ export default function PropertyCard({ property }: PropertyCardProps) {
           <div className="mt-3 flex items-center justify-between">
             <div>
               <p className="text-2xl font-bold text-orange">
-                {formatCurrency(property.tokenInfo.tokenPrice)}
+                {formatETH(property.tokenInfo.tokenPrice)}
               </p>
               <p className="text-xs text-gray-500">par token</p>
             </div>

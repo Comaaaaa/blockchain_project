@@ -137,13 +137,20 @@ async function indexMarketplaceEvents(db, marketplace, fromBlock, toBlock) {
     const amount = event.args[3].toString();
     const pricePerToken = event.args[4].toString();
 
+    // Resolve token_address to property_id
+    const property = db.prepare(
+      `SELECT id FROM properties WHERE LOWER(token_address) = ?`
+    ).get(tokenAddress.toLowerCase());
+    const propertyId = property ? property.id : null;
+
     db.prepare(
-      `INSERT OR IGNORE INTO marketplace_listings (listing_id_onchain, seller_address, token_address, amount, price_per_token_wei, active, tx_hash)
-       VALUES (?, ?, ?, ?, ?, 1, ?)`
+      `INSERT OR IGNORE INTO marketplace_listings (listing_id_onchain, seller_address, token_address, property_id, amount, price_per_token_wei, active, tx_hash)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
     ).run(
       parseInt(listingId),
       seller.toLowerCase(),
       tokenAddress.toLowerCase(),
+      propertyId,
       parseInt(amount),
       pricePerToken,
       event.transactionHash

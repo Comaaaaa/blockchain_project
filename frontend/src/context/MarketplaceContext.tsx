@@ -58,14 +58,28 @@ interface MarketplaceContextType {
 
 const MarketplaceContext = createContext<MarketplaceContextType | undefined>(undefined);
 
+function parseImages(imagesStr: string | null): string[] {
+  if (!imagesStr) return [];
+  try {
+    const parsed = JSON.parse(imagesStr);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function mapApiListing(l: any): MarketplaceListing {
+  const images = parseImages(l.property_images);
+  const tokenPriceWei = l.token_price_wei ? BigInt(l.token_price_wei) : BigInt(0);
+  const pricePerTokenWei = l.price_per_token_wei ? BigInt(l.price_per_token_wei) : BigInt(0);
+
   return {
     id: String(l.listing_id_onchain ?? l.id),
     sellerId: l.seller_address || '',
     sellerAddress: l.seller_address || '',
-    propertyId: l.property_id || '',
+    propertyId: l.property_id || l.prop_id || '',
     property: {
-      id: l.property_id || '',
+      id: l.property_id || l.prop_id || '',
       title: l.property_title || 'Propriete',
       description: '',
       address: '',
@@ -73,22 +87,35 @@ function mapApiListing(l: any): MarketplaceListing {
       zipCode: '',
       country: 'France',
       type: l.property_type || 'apartment',
-      price: 0,
-      surface: 0,
+      price: l.property_price || 0,
+      surface: l.surface || 0,
       rooms: 0,
       bedrooms: 0,
       yearBuilt: 2000,
-      images: [],
-      tokenInfo: { totalTokens: 0, availableTokens: 0, tokenPrice: 0, tokenSymbol: '', blockchain: 'Ethereum Sepolia' },
-      financials: { annualRent: 0, annualCharges: 0, netYield: 0, grossYield: 0, monthlyRent: 0, occupancyRate: 0 },
+      images,
+      tokenInfo: {
+        totalTokens: l.total_tokens || 0,
+        availableTokens: (l.total_tokens || 0) - (l.tokens_sold || 0),
+        tokenPrice: Number(tokenPriceWei),
+        tokenSymbol: l.token_symbol || '',
+        blockchain: 'Ethereum Sepolia',
+      },
+      financials: {
+        annualRent: 0,
+        annualCharges: 0,
+        netYield: l.net_yield || 0,
+        grossYield: 0,
+        monthlyRent: 0,
+        occupancyRate: 0,
+      },
       status: 'available',
       owner: '',
       createdAt: '',
       updatedAt: '',
     },
     tokensForSale: l.amount || 0,
-    pricePerToken: parseFloat(l.price_per_token_wei) || 0,
-    totalPrice: (l.amount || 0) * (parseFloat(l.price_per_token_wei) || 0),
+    pricePerToken: Number(pricePerTokenWei),
+    totalPrice: (l.amount || 0) * Number(pricePerTokenWei),
     status: l.active ? 'active' : 'sold',
     createdAt: l.created_at || new Date().toISOString(),
   };
@@ -99,7 +126,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const fetchListings = async () => {
     try {
-      const data = await api.getActiveListings();
+      const data = await api.getAllListings();
       dispatch({ type: 'SET_LISTINGS', payload: data.map(mapApiListing) });
     } catch (error) {
       console.error('Failed to fetch listings:', error);

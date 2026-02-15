@@ -4,6 +4,7 @@ import { useState } from 'react';
 import PageContainer from '@/components/layout/PageContainer';
 import ListingGrid from '@/components/marketplace/ListingGrid';
 import CreateListingModal from '@/components/marketplace/CreateListingModal';
+import Tabs from '@/components/ui/Tabs';
 import Button from '@/components/ui/Button';
 import { useMarketplaceContext } from '@/context/MarketplaceContext';
 import { usePortfolioContext } from '@/context/PortfolioContext';
@@ -13,24 +14,44 @@ import { MarketplaceListing } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { useAccount, useWriteContract } from 'wagmi';
-import { parseEther } from 'viem';
 
 export default function MarketplacePage() {
-  const { activeListings, dispatch: marketplaceDispatch, refetch } = useMarketplaceContext();
+  const { state, activeListings, dispatch: marketplaceDispatch, refetch } = useMarketplaceContext();
   const { dispatch: portfolioDispatch } = usePortfolioContext();
   const { addTransaction } = useTransactionContext();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [buying, setBuying] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('active');
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const addresses = getContractAddresses();
+
+  const myListings = state.listings.filter(
+    (l) => address && l.sellerAddress.toLowerCase() === address.toLowerCase()
+  );
+  const myActiveListings = myListings.filter((l) => l.status === 'active');
+  const soldListings = state.listings.filter((l) => l.status === 'sold');
+
+  const tabs = [
+    { id: 'active', label: 'Offres actives', count: activeListings.length },
+    { id: 'my', label: 'Mes offres', count: myListings.length },
+    { id: 'history', label: 'Historique', count: soldListings.length },
+  ];
+
+  const displayedListings =
+    activeTab === 'active'
+      ? activeListings
+      : activeTab === 'my'
+        ? myListings
+        : soldListings;
 
   const handleBuy = async (listing: MarketplaceListing) => {
     if (!isConnected || !address) return;
     setBuying(listing.id);
 
     try {
-      const totalPrice = BigInt(listing.tokensForSale) * BigInt(Math.floor(listing.pricePerToken));
+      const totalPrice = BigInt(listing.tokensForSale) * BigInt(listing.pricePerToken);
 
       const hash = await writeContractAsync({
         address: addresses.PropertyMarketplace as `0x${string}`,
@@ -63,18 +84,42 @@ export default function MarketplacePage() {
         to: address,
         tokens: listing.tokensForSale,
         pricePerToken: listing.pricePerToken,
-        totalAmount: listing.totalPrice,
+        totalAmount: Number(totalPrice),
         txHash: hash,
         status: 'confirmed',
         createdAt: new Date().toISOString(),
       });
 
-      // Refetch from backend after some time (indexer will pick it up)
       setTimeout(() => refetch(), 5000);
     } catch (error: any) {
       console.error('Buy failed:', error?.shortMessage || error?.message);
     } finally {
       setBuying(null);
+    }
+  };
+
+  const handleCancel = async (listing: MarketplaceListing) => {
+    if (!isConnected || !address) return;
+    setCancelling(listing.id);
+
+    try {
+      await writeContractAsync({
+        address: addresses.PropertyMarketplace as `0x${string}`,
+        abi: PropertyMarketplaceABI,
+        functionName: 'cancelListing',
+        args: [BigInt(listing.id)],
+      });
+
+      marketplaceDispatch({
+        type: 'UPDATE_LISTING',
+        payload: { id: listing.id, updates: { status: 'cancelled' } },
+      });
+
+      setTimeout(() => refetch(), 5000);
+    } catch (error: any) {
+      console.error('Cancel failed:', error?.shortMessage || error?.message);
+    } finally {
+      setCancelling(null);
     }
   };
 
@@ -84,10 +129,7 @@ export default function MarketplacePage() {
       subtitle="Achetez et vendez des tokens immobiliers sur le marche secondaire"
     >
       <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-gray-500">
-          {activeListings.length} offre{activeListings.length > 1 ? 's' : ''} active
-          {activeListings.length > 1 ? 's' : ''}
-        </p>
+        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
         <Button onClick={() => setShowCreateModal(true)} disabled={!isConnected}>
           <PlusIcon className="h-5 w-5 mr-1" />
           Creer une offre
@@ -100,7 +142,19 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      <ListingGrid listings={activeListings} onBuy={handleBuy} />
+      {state.loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange mx-auto mb-4" />
+          <p className="text-gray-500">Chargement des offres...</p>
+        </div>
+      ) : (
+        <ListingGrid
+          listings={displayedListings}
+          onBuy={handleBuy}
+          onCancel={handleCancel}
+          currentAddress={address}
+        />
+      )}
 
       <CreateListingModal
         isOpen={showCreateModal}

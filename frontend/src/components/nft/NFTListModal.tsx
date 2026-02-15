@@ -34,7 +34,7 @@ export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTLis
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const numericPrice = parseFloat(priceETH);
-  const effectiveFeeBps = Number(feeBps ?? 100n);
+  const effectiveFeeBps = Number(feeBps ?? BigInt(100));
   const feePercentLabel = (effectiveFeeBps / 100).toFixed(2).replace(/\.00$/, '');
   const feeAmountEth = Number.isFinite(numericPrice) && numericPrice > 0
     ? (numericPrice * (effectiveFeeBps / 10000)).toFixed(6)

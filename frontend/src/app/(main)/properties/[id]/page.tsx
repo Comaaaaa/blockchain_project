@@ -13,6 +13,7 @@ import Badge from '@/components/ui/Badge';
 import ProgressBar from '@/components/ui/ProgressBar';
 import {
   formatCurrency,
+  formatETH,
   formatPercent,
   getPropertyTypeLabel,
   getStatusLabel,
@@ -275,7 +276,7 @@ export default function PropertyDetailPage({ params }: { params: Promise<{ id: s
               <div className="flex justify-between">
                 <span className="text-gray-500">Prix par token</span>
                 <span className="font-bold text-xl text-orange">
-                  {formatCurrency(property.tokenInfo.tokenPrice)}
+                  {formatETH(property.tokenInfo.tokenPrice)}
                 </span>
               </div>
               <div className="flex justify-between">

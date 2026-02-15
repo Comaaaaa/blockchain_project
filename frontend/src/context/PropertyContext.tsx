@@ -99,7 +99,7 @@ function mapApiProperty(p: any): Property {
     tokenInfo: {
       totalTokens: p.total_tokens || 0,
       availableTokens: (p.total_tokens || 0) - (p.tokens_sold || 0),
-      tokenPrice: p.price && p.total_tokens ? Math.round(p.price / p.total_tokens) : 0,
+      tokenPrice: p.token_price_wei ? Number(p.token_price_wei) : 0,
       tokenSymbol: p.token_symbol || '',
       contractAddress: p.token_address || undefined,
       blockchain: 'Ethereum Sepolia',

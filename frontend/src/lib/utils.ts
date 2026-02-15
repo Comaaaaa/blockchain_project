@@ -17,6 +17,13 @@ export function formatNumber(num: number): string {
   return new Intl.NumberFormat('fr-FR').format(num);
 }
 
+export function formatETH(wei: string | number | bigint): string {
+  const value = Number(BigInt(wei)) / 1e18;
+  if (value < 0.0001) return `${(value * 1e6).toFixed(2)} μETH`;
+  if (value < 1) return `${value.toFixed(4)} ETH`;
+  return `${value.toFixed(4)} ETH`;
+}
+
 export function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
 }
