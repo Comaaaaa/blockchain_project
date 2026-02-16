@@ -41,6 +41,18 @@ router.post("/", (req, res) => {
   const db = getDb();
   const { id, type, property_id, token_address, from_address, to_address, tokens, swap_direction, price_per_token_wei, total_amount_wei, tx_hash, block_number, status } = req.body;
 
+  const normalizedSwapDirection =
+    typeof swap_direction === "string" ? swap_direction.toLowerCase() : null;
+  if (
+    normalizedSwapDirection !== null &&
+    normalizedSwapDirection !== "eth_to_token" &&
+    normalizedSwapDirection !== "token_to_eth"
+  ) {
+    return res.status(400).json({
+      error: "swap_direction must be eth_to_token or token_to_eth",
+    });
+  }
+
   if (!tx_hash) {
     return res.status(400).json({ error: "tx_hash is required" });
   }
@@ -57,7 +69,7 @@ router.post("/", (req, res) => {
       from_address ? from_address.toLowerCase() : null,
       to_address ? to_address.toLowerCase() : null,
       tokens || 0,
-      swap_direction || null,
+      normalizedSwapDirection,
       price_per_token_wei || null,
       total_amount_wei || null,
       tx_hash,

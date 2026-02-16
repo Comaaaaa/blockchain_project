@@ -62,7 +62,10 @@ function mapApiTransaction(t: any): Transaction {
               ? 'eth_to_token'
               : undefined;
 
-  const isSwapSell = mappedType === 'swap' && inferredSwapDirection === 'token_to_eth';
+    const resolvedSwapDirection: 'eth_to_token' | 'token_to_eth' | undefined =
+      mappedType === 'swap' ? (inferredSwapDirection || 'eth_to_token') : undefined;
+
+    const isSwapSell = mappedType === 'swap' && resolvedSwapDirection === 'token_to_eth';
   const normalizedSwapTokens = mappedType === 'swap' ? (isSwapSell ? -Math.abs(rawTokens) : Math.abs(rawTokens)) : rawTokens;
   const mappedTokens = isNftMarketplacePurchase && rawTokens === 0 ? 1 : normalizedSwapTokens;
   const mappedPropertyId =
@@ -82,7 +85,7 @@ function mapApiTransaction(t: any): Transaction {
     from: t.from_address || '',
     to: t.to_address || '',
     tokens: mappedTokens,
-    swapDirection: mappedType === 'swap' ? inferredSwapDirection : undefined,
+    swapDirection: resolvedSwapDirection,
     pricePerToken: 0,
     totalAmount: t.total_amount_wei ? Number(formatEther(BigInt(t.total_amount_wei))) : 0,
     totalAmountWei: t.total_amount_wei ? String(t.total_amount_wei) : undefined,

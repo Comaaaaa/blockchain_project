@@ -67,7 +67,7 @@ function initTables() {
       from_address TEXT,
       to_address TEXT,
       tokens INTEGER,
-      swap_direction TEXT,
+      swap_direction TEXT CHECK(swap_direction IS NULL OR swap_direction IN ('eth_to_token','token_to_eth')),
       price_per_token_wei TEXT,
       total_amount_wei TEXT,
       tx_hash TEXT UNIQUE,
