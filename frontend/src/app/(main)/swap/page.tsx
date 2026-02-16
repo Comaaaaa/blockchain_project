@@ -39,9 +39,12 @@ export default function SwapPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const tokenDecimals = Number(
-    (dex === 'pool' ? poolInfo?.tokenDecimals : dexPairInfo?.tokenDecimals) ?? 18
-  );
+  const rawTokenDecimals = (dex === 'pool' ? poolInfo?.tokenDecimals : dexPairInfo?.tokenDecimals);
+  const tokenDecimalsParsed = Number(rawTokenDecimals ?? 0);
+  const tokenDecimals =
+    Number.isFinite(tokenDecimalsParsed) && tokenDecimalsParsed >= 0 && tokenDecimalsParsed <= 18
+      ? tokenDecimalsParsed
+      : 0;
 
   const formatEthValue = (value: string | number | bigint, maximumFractionDigits = 6) => {
     try {
@@ -231,6 +234,7 @@ export default function SwapPage() {
           (dex === 'pool' ? ' (Pool)' : dex === 'uniswap' ? ' (Uniswap)' : ' (Sushiswap)'),
         from: direction === 'eth_to_token' ? address! : address!,
         to: direction === 'eth_to_token' ? address! : address!,
+        swapDirection: direction,
         tokens:
           Number.isFinite(swapTokens)
             ? direction === 'eth_to_token'

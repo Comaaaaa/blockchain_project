@@ -67,6 +67,7 @@ function initTables() {
       from_address TEXT,
       to_address TEXT,
       tokens INTEGER,
+      swap_direction TEXT CHECK(swap_direction IS NULL OR swap_direction IN ('eth_to_token','token_to_eth')),
       price_per_token_wei TEXT,
       total_amount_wei TEXT,
       tx_hash TEXT UNIQUE,
@@ -119,6 +120,13 @@ function initTables() {
   // Migration: add listing_status column to existing marketplace_listings table
   try {
     db.exec(`ALTER TABLE marketplace_listings ADD COLUMN listing_status TEXT DEFAULT 'active'`);
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  // Migration: add swap_direction column to existing transactions table
+  try {
+    db.exec(`ALTER TABLE transactions ADD COLUMN swap_direction TEXT`);
   } catch (e) {
     // Column already exists, ignore
   }

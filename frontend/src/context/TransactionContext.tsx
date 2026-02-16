@@ -46,8 +46,26 @@ function mapApiTransaction(t: any): Transaction {
   const isNftMarketplacePurchase = fromAddress === 'nft_marketplace' && t.type === 'listing_sold';
   const mappedType = t.type === 'listing_sold' ? 'purchase' : t.type;
   const rawTokens = Number(t.tokens || 0);
+  const rawSwapDirection = String(t.swap_direction || t.direction || '').toLowerCase();
   const swapTitle = String(t.property_title || '');
-  const isSwapSell = mappedType === 'swap' && swapTitle.includes('PAR7E → ETH');
+  const hasStructuredSwapDirection = rawSwapDirection === 'eth_to_token' || rawSwapDirection === 'token_to_eth';
+  const inferredSwapDirection: 'eth_to_token' | 'token_to_eth' | undefined =
+    hasStructuredSwapDirection
+      ? (rawSwapDirection as 'eth_to_token' | 'token_to_eth')
+      : rawTokens < 0
+        ? 'token_to_eth'
+        : rawTokens > 0
+          ? 'eth_to_token'
+          : swapTitle.includes('PAR7E → ETH')
+            ? 'token_to_eth'
+            : swapTitle.includes('ETH → PAR7E')
+              ? 'eth_to_token'
+              : undefined;
+
+    const resolvedSwapDirection: 'eth_to_token' | 'token_to_eth' | undefined =
+      mappedType === 'swap' ? (inferredSwapDirection || 'eth_to_token') : undefined;
+
+    const isSwapSell = mappedType === 'swap' && resolvedSwapDirection === 'token_to_eth';
   const normalizedSwapTokens = mappedType === 'swap' ? (isSwapSell ? -Math.abs(rawTokens) : Math.abs(rawTokens)) : rawTokens;
   const mappedTokens = isNftMarketplacePurchase && rawTokens === 0 ? 1 : normalizedSwapTokens;
   const mappedPropertyId =
@@ -67,6 +85,7 @@ function mapApiTransaction(t: any): Transaction {
     from: t.from_address || '',
     to: t.to_address || '',
     tokens: mappedTokens,
+    swapDirection: resolvedSwapDirection,
     pricePerToken: 0,
     totalAmount: t.total_amount_wei ? Number(formatEther(BigInt(t.total_amount_wei))) : 0,
     totalAmountWei: t.total_amount_wei ? String(t.total_amount_wei) : undefined,
@@ -92,6 +111,7 @@ async function saveTransactionToBackend(tx: Transaction) {
       from_address: tx.from,
       to_address: tx.to,
       tokens: tx.tokens,
+      swap_direction: tx.type === 'swap' ? tx.swapDirection : undefined,
       total_amount_wei: totalAmountWei,
       tx_hash: tx.txHash,
       status: tx.status,

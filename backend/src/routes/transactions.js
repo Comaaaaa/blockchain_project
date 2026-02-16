@@ -39,7 +39,19 @@ router.get("/", (req, res) => {
 // POST /api/transactions — Record a new transaction
 router.post("/", (req, res) => {
   const db = getDb();
-  const { id, type, property_id, token_address, from_address, to_address, tokens, price_per_token_wei, total_amount_wei, tx_hash, block_number, status } = req.body;
+  const { id, type, property_id, token_address, from_address, to_address, tokens, swap_direction, price_per_token_wei, total_amount_wei, tx_hash, block_number, status } = req.body;
+
+  const normalizedSwapDirection =
+    typeof swap_direction === "string" ? swap_direction.toLowerCase() : null;
+  if (
+    normalizedSwapDirection !== null &&
+    normalizedSwapDirection !== "eth_to_token" &&
+    normalizedSwapDirection !== "token_to_eth"
+  ) {
+    return res.status(400).json({
+      error: "swap_direction must be eth_to_token or token_to_eth",
+    });
+  }
 
   if (!tx_hash) {
     return res.status(400).json({ error: "tx_hash is required" });
@@ -47,8 +59,8 @@ router.post("/", (req, res) => {
 
   try {
     const result = db.prepare(
-      `INSERT OR IGNORE INTO transactions (id, type, property_id, token_address, from_address, to_address, tokens, price_per_token_wei, total_amount_wei, tx_hash, block_number, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR IGNORE INTO transactions (id, type, property_id, token_address, from_address, to_address, tokens, swap_direction, price_per_token_wei, total_amount_wei, tx_hash, block_number, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id || `tx-${tx_hash.slice(0, 16)}`,
       type || "purchase",
@@ -57,6 +69,7 @@ router.post("/", (req, res) => {
       from_address ? from_address.toLowerCase() : null,
       to_address ? to_address.toLowerCase() : null,
       tokens || 0,
+      normalizedSwapDirection,
       price_per_token_wei || null,
       total_amount_wei || null,
       tx_hash,

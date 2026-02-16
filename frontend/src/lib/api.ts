@@ -74,6 +74,7 @@ export const api = {
     from_address?: string;
     to_address?: string;
     tokens?: number;
+    swap_direction?: 'eth_to_token' | 'token_to_eth';
     price_per_token_wei?: string;
     total_amount_wei?: string;
     tx_hash: string;
