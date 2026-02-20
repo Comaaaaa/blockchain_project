@@ -30,6 +30,19 @@ interface ComplianceUser {
   created_at: string;
 }
 
+interface AssetRequest {
+  id: string;
+  owner_address: string;
+  title: string;
+  asset_type: string;
+  location?: string;
+  valuation_eur?: number;
+  status: string;
+  tx_hash?: string;
+  nft_token_id?: number;
+  created_at: string;
+}
+
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
   const [users, setUsers] = useState<ComplianceUser[]>([]);
@@ -49,6 +62,7 @@ export default function AdminPage() {
 
   // Check current wallet compliance
   const [walletStatus, setWalletStatus] = useState<any>(null);
+  const [assetRequests, setAssetRequests] = useState<AssetRequest[]>([]);
 
   const fetchUsers = async () => {
     try {
@@ -58,6 +72,15 @@ export default function AdminPage() {
       console.error('Failed to fetch users:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAssetRequests = async () => {
+    try {
+      const data = await api.getAssetRequests();
+      setAssetRequests(data);
+    } catch {
+      setAssetRequests([]);
     }
   };
 
@@ -74,7 +97,50 @@ export default function AdminPage() {
   useEffect(() => {
     fetchUsers();
     checkWalletStatus();
+    fetchAssetRequests();
   }, [address]);
+
+  const handleApproveRequest = async (requestId: string) => {
+    if (!address) return;
+    setActionLoading(`approve-${requestId}`);
+    try {
+      await api.approveAssetRequest(requestId, address);
+      await fetchAssetRequests();
+      setResult({ success: true, message: 'Demande approuvee.' });
+    } catch (error: any) {
+      setResult({ success: false, message: error.message || 'Erreur lors de la validation.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    if (!address) return;
+    setActionLoading(`reject-${requestId}`);
+    try {
+      await api.rejectAssetRequest(requestId, address);
+      await fetchAssetRequests();
+      setResult({ success: true, message: 'Demande rejetee.' });
+    } catch (error: any) {
+      setResult({ success: false, message: error.message || 'Erreur lors du rejet.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleTokenizeRequest = async (requestId: string) => {
+    if (!address) return;
+    setActionLoading(`tokenize-${requestId}`);
+    try {
+      await api.tokenizeAssetRequest(requestId, address);
+      await fetchAssetRequests();
+      setResult({ success: true, message: 'Tokenisation effectuee on-chain.' });
+    } catch (error: any) {
+      setResult({ success: false, message: error.message || 'Erreur lors de la tokenisation.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleWhitelist = async () => {
     if (!addressInput) return;
@@ -306,6 +372,70 @@ export default function AdminPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Asset tokenization requests */}
+      <Card className="p-6 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Demandes de tokenisation</h3>
+          <Button variant="outline" onClick={fetchAssetRequests} size="sm">
+            <ArrowPathIcon className="h-4 w-4 mr-1" /> Actualiser
+          </Button>
+        </div>
+
+        {assetRequests.length === 0 ? (
+          <p className="text-sm text-gray-500">Aucune demande pour le moment.</p>
+        ) : (
+          <div className="space-y-3">
+            {assetRequests.map((request) => (
+              <div key={request.id} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-gray-900">{request.title}</p>
+                    <p className="text-xs text-gray-500">
+                      {shortenAddress(request.owner_address, 8)} • {request.location || '—'}
+                    </p>
+                  </div>
+                  <Badge variant={request.status === 'tokenized' ? 'success' : request.status === 'rejected' ? 'danger' : 'warning'}>
+                    {request.status}
+                  </Badge>
+                </div>
+
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  {request.status === 'pending' && (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => handleApproveRequest(request.id)}
+                        loading={actionLoading === `approve-${request.id}`}
+                      >
+                        Approuver
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRejectRequest(request.id)}
+                        loading={actionLoading === `reject-${request.id}`}
+                      >
+                        Rejeter
+                      </Button>
+                    </>
+                  )}
+
+                  {request.status === 'approved' && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleTokenizeRequest(request.id)}
+                      loading={actionLoading === `tokenize-${request.id}`}
+                    >
+                      Tokenizer (mint NFT)
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>

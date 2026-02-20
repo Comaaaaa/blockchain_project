@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useReducer, ReactNode } fr
 import { TokenHolding, PortfolioStats, Property } from '@/types';
 import { api } from '@/lib/api';
 import { getCurrentETHPriceEUR, weiToEUR } from '@/hooks/useETHPrice';
+import { useAccount } from 'wagmi';
 
 interface PortfolioState {
   holdings: TokenHolding[];
@@ -236,13 +237,19 @@ function calculateStats(holdings: TokenHolding[]): PortfolioStats {
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(portfolioReducer, initialState);
+  const { address, isConnected } = useAccount();
 
   useEffect(() => {
     const fetchPortfolioFromTransactions = async () => {
       try {
+        if (!isConnected || !address) {
+          dispatch({ type: 'SET_HOLDINGS', payload: [] });
+          return;
+        }
+
         dispatch({ type: 'SET_LOADING', payload: true });
         const [transactions, properties] = await Promise.all([
-          api.getTransactions(),
+          api.getTransactions({ address: address.toLowerCase() }),
           api.getProperties(),
         ]);
 
@@ -265,14 +272,18 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           if (tx.status && tx.status !== 'confirmed') continue;
           if (tx.type !== 'purchase' && tx.type !== 'listing_sold' && tx.type !== 'swap') continue;
 
-          const isNftPurchase =
-            String(tx.from_address || '').toLowerCase() === 'nft_marketplace'
-            && tx.type === 'listing_sold';
+          const wallet = address.toLowerCase();
+          const fromAddress = String(tx.from_address || '').toLowerCase();
+          const toAddress = String(tx.to_address || '').toLowerCase();
+
+          const isListingSold = tx.type === 'listing_sold';
+          const isNftListing = String(tx.token_address || '').toLowerCase().startsWith('nft:');
+          const isNftPurchase = isListingSold && isNftListing && toAddress === wallet;
           const isSwap = tx.type === 'swap';
           const rawSwapDirection = String(tx.swap_direction || tx.direction || '').toLowerCase();
           const swapTitle = String(tx.property_title || '');
 
-          const baseTokens = Number(tx.tokens || (isNftPurchase ? 1 : 0));
+          const baseTokens = Number(tx.tokens || ((isListingSold && isNftListing) ? 1 : 0));
           const inferredSwapDirection: 'eth_to_token' | 'token_to_eth' | undefined =
             rawSwapDirection === 'eth_to_token' || rawSwapDirection === 'token_to_eth'
               ? (rawSwapDirection as 'eth_to_token' | 'token_to_eth')
@@ -288,8 +299,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           const isSwapSell = isSwap && inferredSwapDirection === 'token_to_eth';
           const tokens = isSwap
             ? (isSwapSell ? -Math.abs(baseTokens) : Math.abs(baseTokens))
-            : baseTokens;
-          if (tokens === 0 || (!isSwap && tokens < 0)) continue;
+            : isListingSold
+              ? toAddress === wallet
+                ? Math.abs(baseTokens)
+                : fromAddress === wallet
+                  ? -Math.abs(baseTokens)
+                  : 0
+              : baseTokens;
+          if (tokens === 0 || (!isSwap && !isListingSold && tokens < 0)) continue;
 
           const propertyId = isNftPurchase
             ? `nft-${String(tx.tx_hash || tx.id || Date.now())}`
@@ -398,7 +415,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     fetchPortfolioFromTransactions();
     const interval = setInterval(fetchPortfolioFromTransactions, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [address, isConnected]);
 
   const stats = calculateStats(state.holdings);
 

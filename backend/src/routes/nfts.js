@@ -1,8 +1,52 @@
 const express = require("express");
 const { getDb } = require("../db/database");
 const { getContract } = require("../services/blockchain");
+const { ethers } = require("ethers");
 
 const router = express.Router();
+
+async function reconcileNftListings(db) {
+  try {
+    const marketplace = await getContract("NFTMarketplace");
+    const nextListingId = Number(await marketplace.nextListingId());
+
+    if (!Number.isFinite(nextListingId) || nextListingId <= 0) return;
+
+    const upsertStmt = db.prepare(
+      `INSERT INTO nft_listings
+        (listing_id_onchain, seller_address, nft_contract, nft_token_id, price_wei, active, buyer_address, tx_hash)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
+       ON CONFLICT(listing_id_onchain) DO UPDATE SET
+         seller_address = excluded.seller_address,
+         nft_contract = excluded.nft_contract,
+         nft_token_id = excluded.nft_token_id,
+         price_wei = excluded.price_wei,
+         active = excluded.active`
+    );
+
+    for (let i = 0; i < nextListingId; i++) {
+      const listing = await marketplace.getListing(BigInt(i));
+
+      const seller = String(listing.seller || "").toLowerCase();
+      const nftContract = String(listing.nftContract || "").toLowerCase();
+
+      if (!seller || seller === ethers.ZeroAddress || !nftContract || nftContract === ethers.ZeroAddress) {
+        continue;
+      }
+
+      upsertStmt.run(
+        i,
+        seller,
+        nftContract,
+        Number(listing.tokenId),
+        listing.price.toString(),
+        listing.active ? 1 : 0
+      );
+    }
+  } catch (error) {
+    console.error("[NFT] Reconcile listings failed:", error.message);
+  }
+}
 
 // GET /api/nfts — List all NFTs
 router.get("/", (req, res) => {
@@ -17,8 +61,9 @@ router.get("/", (req, res) => {
 });
 
 // GET /api/nfts/listings — Active NFT listings with joined NFT + property data
-router.get("/listings", (req, res) => {
+router.get("/listings", async (req, res) => {
   const db = getDb();
+  await reconcileNftListings(db);
   const listings = db.prepare(`
     SELECT
       nl.id,
@@ -45,8 +90,9 @@ router.get("/listings", (req, res) => {
 });
 
 // GET /api/nfts/listings/all — All NFT listings (including inactive)
-router.get("/listings/all", (req, res) => {
+router.get("/listings/all", async (req, res) => {
   const db = getDb();
+  await reconcileNftListings(db);
   const listings = db.prepare(`
     SELECT
       nl.id,
@@ -75,6 +121,19 @@ router.get("/listings/all", (req, res) => {
 router.get("/:tokenId", async (req, res) => {
   const tokenId = parseInt(req.params.tokenId);
   const db = getDb();
+  let onChainOwner = null;
+
+  try {
+    const nftContract = await getContract("PropertyNFT");
+    onChainOwner = (await nftContract.ownerOf(tokenId)).toLowerCase();
+
+    db.prepare(
+      `UPDATE nfts SET owner_address = ? WHERE token_id = ?`
+    ).run(onChainOwner, tokenId);
+  } catch {
+    // Keep DB owner if chain lookup fails
+  }
+
   const row = db.prepare(`
     SELECT n.*, p.title AS property_title, p.city AS property_city
     FROM nfts n
@@ -85,7 +144,7 @@ router.get("/:tokenId", async (req, res) => {
   if (row) {
     return res.json({
       tokenId: row.token_id,
-      owner: row.owner_address,
+      owner: onChainOwner || row.owner_address,
       tokenURI: row.token_uri,
       assetType: row.asset_type,
       location: row.location,

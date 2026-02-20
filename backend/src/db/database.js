@@ -108,6 +108,23 @@ function initTables() {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS asset_requests (
+      id TEXT PRIMARY KEY,
+      owner_address TEXT NOT NULL,
+      title TEXT NOT NULL,
+      asset_type TEXT NOT NULL,
+      location TEXT,
+      valuation_eur REAL,
+      valuation_wei TEXT,
+      token_uri TEXT,
+      status TEXT DEFAULT 'pending',
+      admin_note TEXT,
+      nft_token_id INTEGER,
+      tx_hash TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
   `);
 
   // Migration: add tokens_sold column to existing databases

@@ -1,15 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Card from '@/components/ui/Card';
-import { usePropertyContext } from '@/context/PropertyContext';
-import { v4 as uuidv4 } from 'uuid';
-import { Property } from '@/types';
+import { api } from '@/lib/api';
+import { useAccount } from 'wagmi';
 
 const steps = ['Informations generales', 'Caracteristiques', 'Tokenisation', 'Confirmation'];
 
@@ -21,10 +19,11 @@ const typeOptions = [
 ];
 
 export default function NewPropertyPage() {
-  const router = useRouter();
-  const { dispatch } = usePropertyContext();
+  const { address } = useAccount();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [requests, setRequests] = useState<any[]>([]);
 
   const [form, setForm] = useState({
     title: '',
@@ -53,53 +52,53 @@ export default function NewPropertyPage() {
       ? (((form.annualRent - form.annualCharges) / form.price) * 100).toFixed(2)
       : '0.00';
 
+  const fetchMyRequests = async () => {
+    if (!address) {
+      setRequests([]);
+      return;
+    }
+    try {
+      const data = await api.getAssetRequests({ owner: address.toLowerCase() });
+      setRequests(data);
+    } catch {
+      setRequests([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchMyRequests();
+  }, [address]);
+
   const handleSubmit = async () => {
+    if (!address) {
+      setResult({ success: false, message: 'Connectez votre wallet pour soumettre une demande.' });
+      return;
+    }
+
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    const newProperty: Property = {
-      id: uuidv4(),
-      title: form.title,
-      description: form.description,
-      address: form.address,
-      city: form.city,
-      zipCode: form.zipCode,
-      country: 'France',
-      type: form.type as Property['type'],
-      price: form.price,
-      surface: form.surface,
-      rooms: form.rooms,
-      bedrooms: form.bedrooms,
-      yearBuilt: form.yearBuilt,
-      images: [
-        'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800',
-        'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800',
-        'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800',
-      ],
-      tokenInfo: {
-        totalTokens: form.totalTokens,
-        availableTokens: form.totalTokens,
-        tokenPrice: form.tokenPrice || Math.round(form.price / form.totalTokens),
-        tokenSymbol: form.city.slice(0, 3).toUpperCase() + Math.floor(Math.random() * 100),
-        blockchain: 'Ethereum Sepolia',
-      },
-      financials: {
-        annualRent: form.annualRent,
-        annualCharges: form.annualCharges,
-        netYield: parseFloat(netYield),
-        grossYield: form.price > 0 ? (form.annualRent / form.price) * 100 : 0,
-        monthlyRent: Math.round(form.annualRent / 12),
-        occupancyRate: 95,
-      },
-      status: 'available',
-      owner: 'demo-user',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    try {
+      await api.createAssetRequest({
+        owner_address: address,
+        title: form.title,
+        asset_type: 'property_deed',
+        location: `${form.address}, ${form.zipCode} ${form.city}`,
+        valuation_eur: form.price,
+        token_uri: `ipfs://QmTokenImmo/request-${Date.now()}`,
+      });
 
-    dispatch({ type: 'ADD_PROPERTY', payload: newProperty });
-    setLoading(false);
-    router.push('/properties');
+      setResult({ success: true, message: 'Demande envoyee. Un admin doit la valider avant tokenisation.' });
+      await fetchMyRequests();
+      setCurrentStep(0);
+    } catch (error: unknown) {
+      const message =
+        error && typeof error === 'object' && 'message' in error
+          ? (error as { message?: string }).message
+          : undefined;
+      setResult({ success: false, message: message || 'Erreur lors de l\'envoi de la demande.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -347,6 +346,41 @@ export default function NewPropertyPage() {
             </Button>
           )}
         </div>
+      </Card>
+
+      <Card className="max-w-2xl mx-auto p-6 mt-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">Mes demandes de tokenisation</h3>
+
+        {result && (
+          <div
+            className={`mb-4 p-3 rounded-lg text-sm ${
+              result.success
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
+            {result.message}
+          </div>
+        )}
+
+        {requests.length === 0 ? (
+          <p className="text-sm text-gray-500">Aucune demande pour ce wallet.</p>
+        ) : (
+          <div className="space-y-2">
+            {requests.map((request) => (
+              <div key={request.id} className="border border-gray-200 rounded-lg p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-900">{request.title}</span>
+                  <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{request.status}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{request.location || '—'}</p>
+                {request.tx_hash && (
+                  <p className="text-xs text-gray-500 mt-1">Tx: {String(request.tx_hash).slice(0, 12)}...</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </PageContainer>
   );

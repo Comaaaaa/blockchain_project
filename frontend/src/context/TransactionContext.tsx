@@ -4,6 +4,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback, R
 import { Transaction } from '@/types';
 import { api } from '@/lib/api';
 import { formatEther, parseEther } from 'viem';
+import { useAccount } from 'wagmi';
 
 interface TransactionState {
   transactions: Transaction[];
@@ -41,10 +42,16 @@ function transactionReducer(state: TransactionState, action: TransactionAction):
   }
 }
 
-function mapApiTransaction(t: any): Transaction {
+function mapApiTransaction(t: any, currentAddress?: string): Transaction {
+  const wallet = (currentAddress || '').toLowerCase();
   const fromAddress = (t.from_address || '').toLowerCase();
-  const isNftMarketplacePurchase = fromAddress === 'nft_marketplace' && t.type === 'listing_sold';
-  const mappedType = t.type === 'listing_sold' ? 'purchase' : t.type;
+  const toAddress = (t.to_address || '').toLowerCase();
+  const isListingSold = t.type === 'listing_sold';
+  const isNftListing = String(t.token_address || '').toLowerCase().startsWith('nft:');
+
+  const mappedType = isListingSold
+    ? (wallet && fromAddress === wallet ? 'sale' : 'purchase')
+    : t.type;
   const rawTokens = Number(t.tokens || 0);
   const rawSwapDirection = String(t.swap_direction || t.direction || '').toLowerCase();
   const swapTitle = String(t.property_title || '');
@@ -67,15 +74,25 @@ function mapApiTransaction(t: any): Transaction {
 
     const isSwapSell = mappedType === 'swap' && resolvedSwapDirection === 'token_to_eth';
   const normalizedSwapTokens = mappedType === 'swap' ? (isSwapSell ? -Math.abs(rawTokens) : Math.abs(rawTokens)) : rawTokens;
-  const mappedTokens = isNftMarketplacePurchase && rawTokens === 0 ? 1 : normalizedSwapTokens;
+  let mappedTokens = normalizedSwapTokens;
+  if (isListingSold) {
+    const base = rawTokens === 0 && isNftListing ? 1 : Math.abs(rawTokens);
+    if (wallet && fromAddress === wallet) {
+      mappedTokens = -base;
+    } else if (wallet && toAddress === wallet) {
+      mappedTokens = base;
+    } else {
+      mappedTokens = base;
+    }
+  }
   const mappedPropertyId =
     t.property_id
     || (mappedType === 'swap' ? 'prop-001' : '')
-    || (isNftMarketplacePurchase ? `nft-${t.tx_hash || t.id}` : '');
+    || (isNftListing ? `nft-${t.tx_hash || t.id}` : '');
   const mappedPropertyTitle =
     t.property_title
     || (mappedType === 'swap' ? 'Swap PAR7E' : '')
-    || (isNftMarketplacePurchase ? 'NFT TokenImmo (Marketplace)' : '');
+    || (isNftListing ? 'NFT TokenImmo (Marketplace)' : '');
 
   return {
     id: t.id,
@@ -132,11 +149,17 @@ const TransactionContext = createContext<TransactionContextType | undefined>(und
 
 export function TransactionProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(transactionReducer, initialState);
+  const { address, isConnected } = useAccount();
 
   const fetchTransactions = async () => {
     try {
-      const data = await api.getTransactions();
-      dispatch({ type: 'SET_TRANSACTIONS', payload: data.map(mapApiTransaction) });
+      if (!isConnected || !address) {
+        dispatch({ type: 'SET_TRANSACTIONS', payload: [] });
+        return;
+      }
+
+      const data = await api.getTransactions({ address: address.toLowerCase() });
+      dispatch({ type: 'SET_TRANSACTIONS', payload: data.map((tx) => mapApiTransaction(tx, address)) });
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -153,7 +176,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     fetchTransactions();
     const interval = setInterval(fetchTransactions, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [address, isConnected]);
 
   return (
     <TransactionContext.Provider value={{ state, dispatch, addTransaction, refetch: fetchTransactions }}>

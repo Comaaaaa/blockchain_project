@@ -103,4 +103,34 @@ export const api = {
 
   // Health
   getHealth: () => fetchApi<any>('/health'),
+
+  // Asset requests (quick tokenization workflow)
+  createAssetRequest: (data: {
+    owner_address: string;
+    title: string;
+    asset_type: string;
+    location?: string;
+    valuation_eur?: number;
+    valuation_wei?: string;
+    token_uri?: string;
+  }) => fetchApi<any>('/assets/requests', { method: 'POST', body: JSON.stringify(data) }),
+  getAssetRequests: (params?: Record<string, string>) => {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    return fetchApi<any[]>(`/assets/requests${query}`);
+  },
+  approveAssetRequest: (id: string, actor_address: string, admin_note?: string) =>
+    fetchApi<any>(`/assets/requests/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ actor_address, admin_note }),
+    }),
+  rejectAssetRequest: (id: string, actor_address: string, admin_note?: string) =>
+    fetchApi<any>(`/assets/requests/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ actor_address, admin_note }),
+    }),
+  tokenizeAssetRequest: (id: string, actor_address: string) =>
+    fetchApi<any>(`/assets/requests/${id}/tokenize`, {
+      method: 'POST',
+      body: JSON.stringify({ actor_address }),
+    }),
 };
