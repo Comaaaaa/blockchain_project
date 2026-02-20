@@ -154,8 +154,8 @@ function parseImages(images: unknown): string[] {
   return [];
 }
 
-function mapApiPropertyToProperty(p: Record<string, unknown>, ethPrice: number): Property {
-  const tokenPriceWei = p.token_price_wei ? BigInt(p.token_price_wei) : BigInt(0);
+function mapApiPropertyToProperty(p: any, ethPrice: number): Property {
+  const tokenPriceWei = p.token_price_wei ? BigInt(p.token_price_wei as string) : BigInt(0);
 
   return {
     id: p.id,

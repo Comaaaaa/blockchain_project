@@ -29,12 +29,21 @@ export default function NFTBuyButton({ listing, onSuccess }: NFTBuyButtonProps) 
 
     try {
       const hash = await writeContractAsync({
+        gas: BigInt(300000),
         address: addresses.NFTMarketplace as `0x${string}`,
         abi: NFTMarketplaceABI,
         functionName: 'buyListing',
         args: [BigInt(listing.listingIdOnchain)],
         value: BigInt(listing.priceWei),
       });
+
+      const { waitForTransactionReceipt } = await import('wagmi/actions');
+      const { wagmiConfig } = await import('@/config/wagmi');
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash });
+
+      if (receipt.status !== 'success') {
+        throw new Error('Transaction reverted on the blockchain.');
+      }
 
       setResult({ success: true, message: `Achat reussi ! Tx: ${hash.slice(0, 10)}...` });
       setTimeout(() => {

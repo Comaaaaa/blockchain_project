@@ -64,10 +64,12 @@ function seed() {
     return BigInt(Math.round(ethValue * 1e18)).toString();
   }
 
+  const deployerAddress = process.env.DEPLOYER_ADDRESS || "0x643945A119dF978b39749139c327cF380c767F89";
+
   const nftProperties = properties.slice(0, 3);
   const nfts = nftProperties.map((p, i) => ({
     token_id: i,
-    owner_address: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+    owner_address: deployerAddress,
     asset_type: "property_deed",
     location: `${p.address}, ${p.zip_code} ${p.city}`,
     valuation_wei: computeValuationWei(p.price),

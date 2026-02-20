@@ -71,13 +71,24 @@ export default function TokenPurchaseForm({ property }: TokenPurchaseFormProps) 
 
       // Call buyTokens on the PropertyToken contract
       // tokenPrice is in wei — send exact cost
+      // Using a reasonable gas limit to prevent "transaction gas limit too high" errors on Sepolia
       const hash = await writeContractAsync({
         address: tokenAddress as `0x${string}`,
         abi: PropertyTokenABI,
         functionName: 'buyTokens',
         args: [BigInt(tokens)],
         value: totalCostWei,
+        gas: BigInt(300000),
       });
+
+      // Wait for the transaction to be mined
+      const { waitForTransactionReceipt } = await import('wagmi/actions');
+      const { wagmiConfig } = await import('@/config/wagmi');
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash });
+
+      if (receipt.status !== 'success') {
+        throw new Error('Transaction reverted on the blockchain.');
+      }
 
       // Record transaction (persisted to backend)
       addTransaction({

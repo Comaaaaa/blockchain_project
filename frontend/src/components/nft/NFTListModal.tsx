@@ -56,6 +56,7 @@ export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTLis
       // Step 1: Approve marketplace to transfer the NFT
       setStep('approving');
       await writeContractAsync({
+        gas: BigInt(300000),
         address: nftContractAddr,
         abi: PropertyNFTABI,
         functionName: 'approve',
@@ -65,6 +66,7 @@ export default function NFTListModal({ isOpen, onClose, nft, onSuccess }: NFTLis
       // Step 2: Create listing on NFTMarketplace
       setStep('listing');
       const hash = await writeContractAsync({
+        gas: BigInt(300000),
         address: marketplaceAddr,
         abi: NFTMarketplaceABI,
         functionName: 'createListing',

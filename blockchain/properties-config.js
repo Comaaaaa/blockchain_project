@@ -1,5 +1,5 @@
 // Taux de reference ETH/EUR utilisé pour calculer les prix de tokens on-chain
-const ETH_EUR_RATE = Number(process.env.ETH_EUR_RATE || "2500"); // 1 ETH = 2 500 € par defaut
+const ETH_EUR_RATE = Number(process.env.ETH_EUR_RATE || "5000000"); // 1 ETH = 5 000 000 € par defaut pour testnet
 
 if (!Number.isFinite(ETH_EUR_RATE) || ETH_EUR_RATE <= 0) {
   throw new Error("Invalid ETH_EUR_RATE env var. Expected a positive number.");
