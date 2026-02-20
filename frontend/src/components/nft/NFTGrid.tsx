@@ -7,7 +7,11 @@ interface NFTGridProps {
 }
 
 export default function NFTGrid({ nfts, listings }: NFTGridProps) {
-  if (nfts.length === 0) {
+  const uniqueNfts = nfts.filter((nft, index, array) => {
+    return array.findIndex((item) => item.tokenId === nft.tokenId) === index;
+  });
+
+  if (uniqueNfts.length === 0) {
     return (
       <div className="text-center py-16">
         <p className="text-gray-500 text-lg">Aucun NFT disponible.</p>
@@ -28,7 +32,7 @@ export default function NFTGrid({ nfts, listings }: NFTGridProps) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {nfts.map((nft) => (
+      {uniqueNfts.map((nft) => (
         <NFTCard
           key={nft.tokenId}
           nft={nft}

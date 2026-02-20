@@ -33,9 +33,71 @@ async function getTokenMetadata(tokenAddress) {
   };
 }
 
+async function reconcileMarketplaceListings(db) {
+  try {
+    const marketplace = await getContract("PropertyMarketplace");
+    const nextListingId = Number(await marketplace.nextListingId());
+
+    if (!Number.isFinite(nextListingId) || nextListingId <= 0) return;
+
+    const propertyByTokenStmt = db.prepare(
+      `SELECT id FROM properties WHERE LOWER(token_address) = ?`
+    );
+    const existingStatusStmt = db.prepare(
+      `SELECT listing_status FROM marketplace_listings WHERE listing_id_onchain = ?`
+    );
+    const upsertStmt = db.prepare(
+      `INSERT INTO marketplace_listings
+        (listing_id_onchain, seller_address, token_address, property_id, amount, price_per_token_wei, listing_status, active, tx_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+       ON CONFLICT(listing_id_onchain) DO UPDATE SET
+         seller_address = excluded.seller_address,
+         token_address = excluded.token_address,
+         property_id = excluded.property_id,
+         amount = excluded.amount,
+         price_per_token_wei = excluded.price_per_token_wei,
+         listing_status = excluded.listing_status,
+         active = excluded.active`
+    );
+
+    for (let i = 0; i < nextListingId; i++) {
+      const listing = await marketplace.getListing(BigInt(i));
+      const tokenAddress = String(listing.tokenAddress || "").toLowerCase();
+      const seller = String(listing.seller || "").toLowerCase();
+
+      if (!tokenAddress || tokenAddress === ethers.ZeroAddress || !seller || seller === ethers.ZeroAddress) {
+        continue;
+      }
+
+      const property = propertyByTokenStmt.get(tokenAddress);
+      const existing = existingStatusStmt.get(i);
+      const isActive = Boolean(listing.active);
+
+      let listingStatus = "active";
+      if (!isActive) {
+        listingStatus = existing?.listing_status === "cancelled" ? "cancelled" : "sold";
+      }
+
+      upsertStmt.run(
+        i,
+        seller,
+        tokenAddress,
+        property ? property.id : null,
+        Number(listing.amount),
+        listing.pricePerToken.toString(),
+        listingStatus,
+        isActive ? 1 : 0
+      );
+    }
+  } catch (error) {
+    console.error("[Marketplace] Reconcile failed:", error.message);
+  }
+}
+
 // GET /api/marketplace/listings — All active listings (enriched with property data)
-router.get("/listings", (req, res) => {
+router.get("/listings", async (req, res) => {
   const db = getDb();
+  await reconcileMarketplaceListings(db);
   const listings = db
     .prepare(
       `SELECT ml.*,
@@ -53,8 +115,9 @@ router.get("/listings", (req, res) => {
 });
 
 // GET /api/marketplace/listings/all — All listings (including sold/cancelled)
-router.get("/listings/all", (req, res) => {
+router.get("/listings/all", async (req, res) => {
   const db = getDb();
+  await reconcileMarketplaceListings(db);
   const listings = db
     .prepare(
       `SELECT ml.*,
@@ -71,8 +134,9 @@ router.get("/listings/all", (req, res) => {
 });
 
 // GET /api/marketplace/listings/seller/:address — Listings by seller
-router.get("/listings/seller/:address", (req, res) => {
+router.get("/listings/seller/:address", async (req, res) => {
   const db = getDb();
+  await reconcileMarketplaceListings(db);
   const listings = db
     .prepare(
       `SELECT ml.*,
