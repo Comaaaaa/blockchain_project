@@ -178,15 +178,18 @@ async function main() {
   const liquidityETHFormatted = hre.ethers.formatEther(liquidityETHWei);
 
   // Approve swapPool to spend deployer's tokens
-  await firstPropertyTokenInstance.approve(swapPoolAddr, BigInt(liquidityTokens));
-  await swapPool.addLiquidity(BigInt(liquidityTokens), { value: liquidityETHWei });
+  const txApproveSwap = await firstPropertyTokenInstance.approve(swapPoolAddr, BigInt(liquidityTokens));
+  await txApproveSwap.wait();
+  const txAddLiquidity = await swapPool.addLiquidity(BigInt(liquidityTokens), { value: liquidityETHWei });
+  await txAddLiquidity.wait();
   console.log(`Added liquidity: ${liquidityTokens} ${deployedPropertyTokens[0].symbol} + ${liquidityETHFormatted} ETH`);
 
   // 11. Create a demo token marketplace listing
   console.log("\n--- Creating demo token listing ---");
   const demoTokenPrice = BigInt(properties[0].token_price_wei);
   // Approve the marketplace to transfer tokens from deployer
-  await firstPropertyTokenInstance.approve(marketplaceAddr, BigInt(demoListingTokens));
+  const txApproveMarket = await firstPropertyTokenInstance.approve(marketplaceAddr, BigInt(demoListingTokens));
+  await txApproveMarket.wait();
   const txCreateListing = await marketplace.createListing(
     firstPropertyTokenAddr,
     BigInt(demoListingTokens),

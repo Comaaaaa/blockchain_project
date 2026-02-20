@@ -799,10 +799,10 @@ npm run deploy:sepolia:lowcost
 ```
 
 Ce profil applique:
-- `ETH_EUR_RATE=250000` (tokens ~100x moins chers que le profil standard),
-- `NFT_LISTING_PRICE_ETH=0.003`,
-- `INITIAL_LIQUIDITY_TOKENS=2`,
-- `DEMO_LISTING_TOKENS=2`.
+- `ETH_EUR_RATE=5000000` (tokens encore moins chers pour tester avec très peu d'ETH),
+- `NFT_LISTING_PRICE_ETH=0.001`,
+- `INITIAL_LIQUIDITY_TOKENS=1`,
+- `DEMO_LISTING_TOKENS=1`.
 
 ### Option 2 — Ajustement fin via variables d'environnement
 

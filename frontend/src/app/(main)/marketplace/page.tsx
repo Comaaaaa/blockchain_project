@@ -127,6 +127,7 @@ export default function MarketplacePage() {
       const totalPrice = BigInt(listing.tokensForSale) * BigInt(pricePerTokenWei);
 
       const hash = await writeContractAsync({
+        gas: BigInt(300000),
         address: addresses.PropertyMarketplace as `0x${string}`,
         abi: PropertyMarketplaceABI,
         functionName: 'buyListing',
@@ -208,6 +209,7 @@ export default function MarketplacePage() {
       }
 
       await writeContractAsync({
+        gas: BigInt(300000),
         address: addresses.PropertyMarketplace as `0x${string}`,
         abi: PropertyMarketplaceABI,
         functionName: 'cancelListing',

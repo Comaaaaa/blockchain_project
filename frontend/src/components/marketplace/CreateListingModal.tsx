@@ -66,6 +66,7 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
 
       // 1. Approve marketplace to spend tokens
       await writeContractAsync({
+        gas: BigInt(300000),
         address: tokenAddr as `0x${string}`,
         abi: PropertyTokenABI,
         functionName: 'approve',
@@ -74,6 +75,7 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
 
       // 2. Create listing on marketplace
       const hash = await writeContractAsync({
+        gas: BigInt(300000),
         address: addresses.PropertyMarketplace as `0x${string}`,
         abi: PropertyMarketplaceABI,
         functionName: 'createListing',

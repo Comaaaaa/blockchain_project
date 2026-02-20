@@ -97,6 +97,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ tokenId: s
     setCancelling(true);
     try {
       await writeContractAsync({
+        gas: BigInt(300000),
         address: addresses.NFTMarketplace as `0x${string}`,
         abi: NFTMarketplaceABI,
         functionName: 'cancelListing',
@@ -227,7 +228,7 @@ export default function NFTDetailPage({ params }: { params: Promise<{ tokenId: s
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Reseau</span>
-                <span className="font-medium">Hardhat (Local)</span>
+                <span className="font-medium">Sepolia (Testnet)</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Token ID</span>

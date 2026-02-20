@@ -144,6 +144,7 @@ export default function SwapPage() {
           const q = await api.getSwapQuote('eth_to_token', amount);
           swapTokens = Number(q.tokenOutFormatted || 0);
           hash = await writeContractAsync({
+        gas: BigInt(300000),
             address: addresses.TokenSwapPool as `0x${string}`,
             abi: TokenSwapPoolABI,
             functionName: 'swapETHForToken',
@@ -162,6 +163,7 @@ export default function SwapPage() {
           const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10);
 
           hash = await writeContractAsync({
+        gas: BigInt(300000),
             address: routerAddress as `0x${string}`,
             abi: UniswapV2RouterABI,
             functionName: 'swapExactETHForTokens',
@@ -181,6 +183,7 @@ export default function SwapPage() {
 
         // Approve first
         await writeContractAsync({
+        gas: BigInt(300000),
           address: propertyTokenAddress,
           abi: PropertyTokenABI,
           functionName: 'approve',
@@ -192,6 +195,7 @@ export default function SwapPage() {
           totalAmountWei = q.ethOut ? String(q.ethOut) : '0';
 
           hash = await writeContractAsync({
+        gas: BigInt(300000),
             address: addresses.TokenSwapPool as `0x${string}`,
             abi: TokenSwapPoolABI,
             functionName: 'swapTokenForETH',
@@ -210,6 +214,7 @@ export default function SwapPage() {
           const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10);
 
           hash = await writeContractAsync({
+        gas: BigInt(300000),
             address: routerAddress as `0x${string}`,
             abi: UniswapV2RouterABI,
             functionName: 'swapExactTokensForETH',
