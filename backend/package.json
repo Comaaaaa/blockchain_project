@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "indexer": "node src/services/indexer.js",
-    "seed": "node src/db/seed.js"
+    "seed": "node src/db/seed.js",
+    "liquidity:all": "node add-liquidity-all.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
