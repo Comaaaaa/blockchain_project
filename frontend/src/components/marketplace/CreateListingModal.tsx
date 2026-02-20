@@ -64,23 +64,43 @@ export default function CreateListingModal({ isOpen, onClose }: CreateListingMod
         return;
       }
 
+      if (!addresses.PropertyMarketplace) {
+        setResult({
+          success: false,
+          message: 'Adresse du marketplace non configuree en production (NEXT_PUBLIC_PROPERTY_MARKETPLACE).',
+        });
+        setLoading(false);
+        return;
+      }
+
       // 1. Approve marketplace to spend tokens
-      await writeContractAsync({
-        gas: BigInt(300000),
+      const approvalHash = await writeContractAsync({
         address: tokenAddr as `0x${string}`,
         abi: PropertyTokenABI,
         functionName: 'approve',
         args: [addresses.PropertyMarketplace as `0x${string}`, BigInt(tokens)],
       });
 
+      const { waitForTransactionReceipt } = await import('wagmi/actions');
+      const { wagmiConfig } = await import('@/config/wagmi');
+
+      const approvalReceipt = await waitForTransactionReceipt(wagmiConfig, { hash: approvalHash });
+      if (approvalReceipt.status !== 'success') {
+        throw new Error('Transaction d\'approbation echouee.');
+      }
+
       // 2. Create listing on marketplace
       const hash = await writeContractAsync({
-        gas: BigInt(300000),
         address: addresses.PropertyMarketplace as `0x${string}`,
         abi: PropertyMarketplaceABI,
         functionName: 'createListing',
         args: [tokenAddr as `0x${string}`, BigInt(tokens), priceWei],
       });
+
+      const listingReceipt = await waitForTransactionReceipt(wagmiConfig, { hash });
+      if (listingReceipt.status !== 'success') {
+        throw new Error('Transaction de creation de l\'offre echouee.');
+      }
 
       setResult({ success: true, message: `Offre creee avec succes ! Tx: ${hash.slice(0, 10)}...` });
       setTimeout(() => {

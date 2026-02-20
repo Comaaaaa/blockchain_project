@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useReducer, ReactNode } fr
 import { TokenHolding, PortfolioStats, Property } from '@/types';
 import { api } from '@/lib/api';
 import { getCurrentETHPriceEUR, weiToEUR } from '@/hooks/useETHPrice';
+import { useAccount } from 'wagmi';
 
 interface PortfolioState {
   holdings: TokenHolding[];
@@ -236,13 +237,19 @@ function calculateStats(holdings: TokenHolding[]): PortfolioStats {
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(portfolioReducer, initialState);
+  const { address, isConnected } = useAccount();
 
   useEffect(() => {
     const fetchPortfolioFromTransactions = async () => {
       try {
+        if (!isConnected || !address) {
+          dispatch({ type: 'SET_HOLDINGS', payload: [] });
+          return;
+        }
+
         dispatch({ type: 'SET_LOADING', payload: true });
         const [transactions, properties] = await Promise.all([
-          api.getTransactions(),
+          api.getTransactions({ address: address.toLowerCase() }),
           api.getProperties(),
         ]);
 
@@ -398,7 +405,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     fetchPortfolioFromTransactions();
     const interval = setInterval(fetchPortfolioFromTransactions, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [address, isConnected]);
 
   const stats = calculateStats(state.holdings);
 

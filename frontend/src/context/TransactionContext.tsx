@@ -4,6 +4,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback, R
 import { Transaction } from '@/types';
 import { api } from '@/lib/api';
 import { formatEther, parseEther } from 'viem';
+import { useAccount } from 'wagmi';
 
 interface TransactionState {
   transactions: Transaction[];
@@ -132,10 +133,16 @@ const TransactionContext = createContext<TransactionContextType | undefined>(und
 
 export function TransactionProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(transactionReducer, initialState);
+  const { address, isConnected } = useAccount();
 
   const fetchTransactions = async () => {
     try {
-      const data = await api.getTransactions();
+      if (!isConnected || !address) {
+        dispatch({ type: 'SET_TRANSACTIONS', payload: [] });
+        return;
+      }
+
+      const data = await api.getTransactions({ address: address.toLowerCase() });
       dispatch({ type: 'SET_TRANSACTIONS', payload: data.map(mapApiTransaction) });
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
@@ -153,7 +160,7 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
     fetchTransactions();
     const interval = setInterval(fetchTransactions, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [address, isConnected]);
 
   return (
     <TransactionContext.Provider value={{ state, dispatch, addTransaction, refetch: fetchTransactions }}>

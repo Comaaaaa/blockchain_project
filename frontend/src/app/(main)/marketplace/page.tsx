@@ -11,7 +11,7 @@ import { useMarketplaceContext } from '@/context/MarketplaceContext';
 import { usePortfolioContext } from '@/context/PortfolioContext';
 import { useTransactionContext } from '@/context/TransactionContext';
 import { api } from '@/lib/api';
-import { PropertyMarketplaceABI, getContractAddresses } from '@/lib/contracts';
+import { PropertyMarketplaceABI, ComplianceRegistryABI, getContractAddresses } from '@/lib/contracts';
 import { MarketplaceListing, NFT, NFTListing } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { PlusIcon } from '@heroicons/react/24/outline';
@@ -37,6 +37,8 @@ export default function MarketplacePage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState('active');
   const [cancellingListingId, setCancellingListingId] = useState<string | null>(null);
+  const [buyingListingId, setBuyingListingId] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<{ success: boolean; message: string } | null>(null);
   const [nftListings, setNftListings] = useState<NFTListing[]>([]);
   const [listedNfts, setListedNfts] = useState<NFT[]>([]);
   const { address, isConnected } = useAccount();
@@ -120,20 +122,94 @@ export default function MarketplacePage() {
         : soldListings;
 
   const handleBuy = async (listing: MarketplaceListing) => {
-    if (!isConnected || !address) return;
+    if (!isConnected || !address || !publicClient) return;
 
     try {
-      const pricePerTokenWei = listing.pricePerTokenWei || '0';
-      const totalPrice = BigInt(listing.tokensForSale) * BigInt(pricePerTokenWei);
+      setActionResult(null);
+
+      if (!addresses.PropertyMarketplace) {
+        setActionResult({
+          success: false,
+          message: 'Adresse du marketplace non configuree (NEXT_PUBLIC_PROPERTY_MARKETPLACE).',
+        });
+        return;
+      }
+
+      if (!addresses.ComplianceRegistry) {
+        setActionResult({
+          success: false,
+          message: 'Adresse du registre KYC non configuree (NEXT_PUBLIC_COMPLIANCE_REGISTRY).',
+        });
+        return;
+      }
+
+      const listingId = Number(listing.id);
+      if (!Number.isInteger(listingId) || listingId < 0) {
+        setActionResult({ success: false, message: 'Listing invalide (id incorrect).' });
+        return;
+      }
+
+      setBuyingListingId(listing.id);
+
+      const [onChainListing, isCompliant] = await Promise.all([
+        publicClient.readContract({
+          address: addresses.PropertyMarketplace as `0x${string}`,
+          abi: PropertyMarketplaceABI,
+          functionName: 'getListing',
+          args: [BigInt(listingId)],
+        }),
+        publicClient.readContract({
+          address: addresses.ComplianceRegistry as `0x${string}`,
+          abi: ComplianceRegistryABI,
+          functionName: 'isCompliant',
+          args: [address as `0x${string}`],
+        }),
+      ]);
+
+      if (!onChainListing.active) {
+        marketplaceDispatch({
+          type: 'UPDATE_LISTING',
+          payload: { id: listing.id, updates: { status: 'sold' } },
+        });
+        setActionResult({ success: false, message: 'Cette offre n\'est plus active.' });
+        refetch();
+        return;
+      }
+
+      if (!isCompliant) {
+        setActionResult({
+          success: false,
+          message: 'Votre wallet doit etre whitelist KYC pour acheter sur le marketplace.',
+        });
+        return;
+      }
+
+      if (onChainListing.seller.toLowerCase() === address.toLowerCase()) {
+        setActionResult({ success: false, message: 'Vous ne pouvez pas acheter votre propre offre.' });
+        return;
+      }
+
+      const totalPrice = onChainListing.amount * onChainListing.pricePerToken;
+      if (totalPrice <= BigInt(0)) {
+        setActionResult({ success: false, message: 'Prix de listing invalide.' });
+        return;
+      }
 
       const hash = await writeContractAsync({
-        gas: BigInt(300000),
         address: addresses.PropertyMarketplace as `0x${string}`,
         abi: PropertyMarketplaceABI,
         functionName: 'buyListing',
-        args: [BigInt(listing.id)],
+        args: [BigInt(listingId)],
         value: totalPrice,
       });
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== 'success') {
+        throw new Error('Transaction echouee on-chain.');
+      }
+
+      const tokensBought = Number(onChainListing.amount);
+      const pricePerTokenWei = onChainListing.pricePerToken.toString();
 
       marketplaceDispatch({
         type: 'UPDATE_LISTING',
@@ -144,7 +220,7 @@ export default function MarketplacePage() {
         type: 'ADD_HOLDING',
         payload: {
           propertyId: listing.propertyId,
-          tokens: listing.tokensForSale,
+          tokens: Number.isFinite(tokensBought) ? tokensBought : listing.tokensForSale,
           pricePerToken: Number(formatEther(BigInt(pricePerTokenWei))),
         },
       });
@@ -156,7 +232,7 @@ export default function MarketplacePage() {
         propertyTitle: listing.property.title,
         from: listing.sellerAddress,
         to: address,
-        tokens: listing.tokensForSale,
+        tokens: Number.isFinite(tokensBought) ? tokensBought : listing.tokensForSale,
         pricePerToken: Number(formatEther(BigInt(pricePerTokenWei))),
         totalAmount: Number(formatEther(totalPrice)),
         totalAmountWei: totalPrice.toString(),
@@ -165,9 +241,24 @@ export default function MarketplacePage() {
         createdAt: new Date().toISOString(),
       });
 
+      setActionResult({ success: true, message: 'Achat confirme on-chain.' });
+
       setTimeout(() => refetch(), 5000);
     } catch (error: unknown) {
-      console.error('Buy failed:', getErrorMessage(error));
+      const message = getErrorMessage(error);
+      setActionResult({
+        success: false,
+        message: message.includes('Buyer not KYC')
+          ? 'Votre wallet doit etre whitelist KYC pour acheter.'
+          : message.includes('Cannot buy own listing')
+            ? 'Vous ne pouvez pas acheter votre propre offre.'
+            : message.includes('Listing not active')
+              ? 'Cette offre n\'est plus active.'
+              : message,
+      });
+      console.error('Buy failed:', message);
+    } finally {
+      setBuyingListingId(null);
     }
   };
 
@@ -257,6 +348,18 @@ export default function MarketplacePage() {
         </div>
       )}
 
+      {actionResult && (
+        <div
+          className={`rounded-lg p-4 mb-6 text-sm border ${
+            actionResult.success
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          {actionResult.message}
+        </div>
+      )}
+
       {state.loading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange mx-auto mb-4" />
@@ -269,7 +372,7 @@ export default function MarketplacePage() {
             onBuy={handleBuy}
             onCancel={handleCancel}
             currentAddress={address}
-            cancellingListingId={cancellingListingId}
+            cancellingListingId={cancellingListingId || buyingListingId}
           />
 
           {activeTab === 'active' && listedNfts.length > 0 && (
