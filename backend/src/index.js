@@ -15,6 +15,7 @@ const transactionsRouter = require("./routes/transactions");
 const oracleRouter = require("./routes/oracle");
 const nftsRouter = require("./routes/nfts");
 const contractsRouter = require("./routes/contracts");
+const assetsRouter = require("./routes/assets");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,6 +38,7 @@ app.use("/api/transactions", transactionsRouter);
 app.use("/api/oracle", oracleRouter);
 app.use("/api/nfts", nftsRouter);
 app.use("/api/contracts", contractsRouter);
+app.use("/api/assets", assetsRouter);
 
 // Health check
 app.get("/api/health", async (_req, res) => {
